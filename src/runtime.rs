@@ -12,11 +12,15 @@ use std::net::{TcpListener, TcpStream};
 // --- Runtime State ---
 pub struct RuntimeState {
     pub allocations: HashSet<usize>,
-    pub allocation_order: Vec<usize>,
+    pub head: *mut ObjHeader,
+    pub tail: *mut ObjHeader,
+    pub allocation_count: usize,
     pub roots: HashSet<usize>,
     pub allocated_bytes: usize,
     pub threshold: usize,
 }
+
+unsafe impl Send for RuntimeState {}
 
 static STATE_INIT: Once = Once::new();
 static mut STATE_PTR: *mut Mutex<RuntimeState> = ptr::null_mut();
@@ -25,10 +29,12 @@ fn get_state() -> &'static Mutex<RuntimeState> {
     STATE_INIT.call_once(|| {
         let state = Box::new(Mutex::new(RuntimeState {
             allocations: HashSet::new(),
-            allocation_order: Vec::new(),
+            head: ptr::null_mut(),
+            tail: ptr::null_mut(),
+            allocation_count: 0,
             roots: HashSet::new(),
             allocated_bytes: 0,
-            threshold: 10 * 1024, // Hạ xuống 10KB để dễ test
+            threshold: 1024 * 1024, 
         }));
         unsafe { STATE_PTR = Box::into_raw(state); }
     });
@@ -47,6 +53,8 @@ pub struct ObjHeader {
     pub size: usize,
     pub ref_count: AtomicUsize,
     pub marked: bool,
+    pub prev: *mut ObjHeader,
+    pub next: *mut ObjHeader,
 }
 
 const HEADER_SIZE: usize = std::mem::size_of::<ObjHeader>();
@@ -58,108 +66,14 @@ pub struct LuniteResult {
     pub payload: i64,
 }
 
-// --- GC Logic: Mark-and-Sweep ---
-
-unsafe fn mark_object(ptr: usize, state: &mut RuntimeState) {
-    if !state.allocations.contains(&ptr) { return; }
-    
-    let header = (ptr - HEADER_SIZE) as *mut ObjHeader;
-    if (*header).marked { return; }
-    
-    // Đánh dấu đối tượng này còn sống
-    (*header).marked = true;
-    
-    // Quét nội dung bên trong đối tượng (Conservative Scanning)
-    // Chúng ta giả định mọi giá trị 8-byte căn lề (aligned) đều có thể là một con trỏ
-    let size = (*header).size;
-    let words = size / std::mem::size_of::<usize>();
-    let data_ptr = ptr as *const usize;
-    
-    for i in 0..words {
-        let potential_ptr = *data_ptr.add(i);
-        // Nếu giá trị này nằm trong danh sách các ô nhớ chúng ta quản lý, quét tiếp nó
-        if state.allocations.contains(&potential_ptr) {
-            mark_object(potential_ptr, state);
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn lunite_gc_collect() {
-    let mut state = get_state().lock().unwrap();
-    // 1. Mark Phase: Bắt đầu từ các gốc (roots)
-    let roots: Vec<usize> = state.roots.iter().cloned().collect();
-    for root in roots {
-        unsafe { mark_object(root, &mut state); }
-    }
-    
-    // 2. Sweep Phase: Giải phóng những thằng không được mark
-    let mut to_free = Vec::new();
-    let mut new_order = Vec::new();
-    
-    for &ptr in &state.allocation_order {
-        unsafe {
-            let header = (ptr - HEADER_SIZE) as *mut ObjHeader;
-            if (*header).marked {
-                (*header).marked = false; // Reset cho lần sau
-                new_order.push(ptr);
-            } else {
-                to_free.push(ptr);
-            }
-        }
-    }
-    
-    state.allocation_order = new_order;
-    
-    let mut freed_bytes = 0;
-    for ptr in to_free {
-        state.allocations.remove(&ptr);
-        unsafe {
-            let header_ptr = (ptr - HEADER_SIZE) as *mut ObjHeader;
-            let size = (*header_ptr).size;
-            let total_size = (*header_ptr).actual_allocated_size;
-            freed_bytes += size;
-            state.allocated_bytes -= size;
-            let layout = Layout::from_size_align(total_size, 16).unwrap();
-            dealloc(header_ptr as *mut u8, layout);
-        }
-    }
-    
-    eprintln!("[GC] Done. Freed {} bytes. Remaining: {} bytes. Threshold: {} bytes", freed_bytes, state.allocated_bytes, state.threshold);
-
-    // Sau khi dọn dẹp, nếu vẫn còn dùng nhiều, tăng threshold lên gấp đôi để tránh GC quá dày
-    if state.allocated_bytes > state.threshold / 2 {
-        state.threshold *= 2;
-        eprintln!("[GC] Threshold increased to {} bytes", state.threshold);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn lunite_gc_register_root(ptr: *mut u8) {
-    if ptr.is_null() { return; }
-    let mut state = get_state().lock().unwrap();
-    state.roots.insert(ptr as usize);
-}
-
-#[no_mangle]
-pub extern "C" fn lunite_gc_remove_root(ptr: *mut u8) {
-    if ptr.is_null() { return; }
-    let mut state = get_state().lock().unwrap();
-    state.roots.remove(&(ptr as usize));
-}
-
-// --- Allocation ---
+// --- Memory Management ---
 
 #[no_mangle]
 pub extern "C" fn lunite_alloc(size: usize, _p1: *mut u8, _p2: *mut u8) -> *mut u8 {
-    // Kiểm tra xem có cần chạy GC không
     {
         let state = get_state().lock().unwrap();
         if state.allocated_bytes > state.threshold {
-            let current_bytes = state.allocated_bytes;
-            let current_threshold = state.threshold;
-            drop(state); // Phải thả lock trước khi gọi gc_collect để tránh deadlock
-            eprintln!("[GC] Triggered: allocated {} > threshold {}", current_bytes, current_threshold);
+            drop(state);
             lunite_gc_collect();
         }
     }
@@ -168,26 +82,29 @@ pub extern "C" fn lunite_alloc(size: usize, _p1: *mut u8, _p2: *mut u8) -> *mut 
         let req_size = if size < 8 { 8 } else { size };
         let total_size = HEADER_SIZE + req_size + PADDING;
         let layout = Layout::from_size_align(total_size, 16).unwrap();
-        let ptr = std::alloc::alloc_zeroed(layout);
-        if ptr.is_null() { return ptr; }
+        let ptr = std::alloc::alloc_zeroed(layout) as *mut ObjHeader;
+        if ptr.is_null() { return ptr as *mut u8; }
         
-        let header = ptr as *mut ObjHeader;
-        (*header).size = req_size;
-        (*header).actual_allocated_size = total_size;
-        (*header).ref_count = AtomicUsize::new(1);
-        (*header).marked = false;
+        (*ptr).size = req_size;
+        (*ptr).actual_allocated_size = total_size;
+        (*ptr).ref_count = AtomicUsize::new(1);
+        (*ptr).marked = false;
         
-        let user_ptr = ptr.add(HEADER_SIZE);
+        let user_ptr = (ptr as usize) + HEADER_SIZE;
         let mut state = get_state().lock().unwrap();
-        state.allocations.insert(user_ptr as usize);
-        state.allocation_order.push(user_ptr as usize);
+        
+        (*ptr).prev = state.tail;
+        (*ptr).next = ptr::null_mut();
+        if !state.tail.is_null() { (*state.tail).next = ptr; } else { state.head = ptr; }
+        state.tail = ptr;
+        
+        state.allocations.insert(user_ptr);
+        state.allocation_count += 1;
         state.allocated_bytes += req_size;
         
-        user_ptr
+        user_ptr as *mut u8
     }
 }
-
-// --- Rest of Runtime (ARC, IO, Math, String, Net, etc.) ---
 
 #[no_mangle]
 pub extern "C" fn lunite_retain(user_ptr: *mut u8) {
@@ -203,21 +120,19 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
     if user_ptr.is_null() { return; }
     unsafe {
         let header_ptr = (user_ptr as usize - HEADER_SIZE) as *mut ObjHeader;
-        let header = &*header_ptr;
-        
-        if header.ref_count.fetch_sub(1, Ordering::Release) == 1 {
+        if (*header_ptr).ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Ordering::Acquire);
-            // Thực hiện giải phóng thật sự
             let mut state = get_state().lock().unwrap();
             if state.allocations.remove(&(user_ptr as usize)) {
-                if let Some(pos) = state.allocation_order.iter().position(|&x| x == user_ptr as usize) {
-                    state.allocation_order.remove(pos);
-                }
-                let size = header.size;
-                let total_size = header.actual_allocated_size;
-                state.allocated_bytes -= size;
-                let layout = Layout::from_size_align(total_size, 16).unwrap();
-                dealloc(header_ptr as *mut u8, layout);
+                let prev = (*header_ptr).prev;
+                let next = (*header_ptr).next;
+                if !prev.is_null() { (*prev).next = next; } else { state.head = next; }
+                if !next.is_null() { (*next).prev = prev; } else { state.tail = prev; }
+                
+                state.allocation_count -= 1;
+                state.allocated_bytes -= (*header_ptr).size;
+                let total_size = (*header_ptr).actual_allocated_size;
+                dealloc(header_ptr as *mut u8, Layout::from_size_align(total_size, 16).unwrap());
             }
         }
     }
@@ -227,15 +142,12 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
 pub extern "C" fn lunite_realloc(ptr: *mut u8, _old_size: i64, new_size: i64) -> *mut u8 {
     if new_size <= 0 { lunite_release(ptr); return ptr::null_mut(); }
     if ptr.is_null() { return lunite_alloc(new_size as usize, ptr::null_mut(), ptr::null_mut()); }
-    
     unsafe {
         let new_user_ptr = lunite_alloc(new_size as usize, ptr::null_mut(), ptr::null_mut());
         if new_user_ptr.is_null() { return ptr::null_mut(); }
-        
         let header = (ptr as usize - HEADER_SIZE) as *mut ObjHeader;
         let copy_size = std::cmp::min((*header).size, new_size as usize);
         ptr::copy_nonoverlapping(ptr, new_user_ptr, copy_size);
-        
         lunite_release(ptr);
         new_user_ptr
     }
@@ -247,17 +159,73 @@ pub extern "C" fn lunite_array_copy(src: *mut u8, dst: *mut u8, count: i64, elem
     unsafe { ptr::copy_nonoverlapping(src, dst, (count * elem_size) as usize); }
 }
 
+// --- GC Logic ---
+
+unsafe fn mark_object(ptr: usize, state: &mut RuntimeState) {
+    if !state.allocations.contains(&ptr) { return; }
+    let header = (ptr - HEADER_SIZE) as *mut ObjHeader;
+    if (*header).marked { return; }
+    (*header).marked = true;
+    let size = (*header).size;
+    let words = size / std::mem::size_of::<usize>();
+    let data_ptr = ptr as *const usize;
+    for i in 0..words {
+        let potential_ptr = *data_ptr.add(i);
+        if state.allocations.contains(&potential_ptr) { mark_object(potential_ptr, state); }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_gc_collect() {
+    let mut state = get_state().lock().unwrap();
+    let roots: Vec<usize> = state.roots.iter().cloned().collect();
+    for root in roots { unsafe { mark_object(root, &mut state); } }
+    let mut current = state.head;
+    let mut to_free = Vec::new();
+    while !current.is_null() {
+        unsafe {
+            let next = (*current).next;
+            if (*current).marked { (*current).marked = false; }
+            else {
+                let prev = (*current).prev;
+                if !prev.is_null() { (*prev).next = next; } else { state.head = next; }
+                if !next.is_null() { (*next).prev = prev; } else { state.tail = prev; }
+                to_free.push(current);
+            }
+            current = next;
+        }
+    }
+    for header_ptr in to_free {
+        unsafe {
+            let user_ptr = (header_ptr as usize) + HEADER_SIZE;
+            state.allocations.remove(&user_ptr);
+            state.allocation_count -= 1;
+            let size = (*header_ptr).size;
+            let total_size = (*header_ptr).actual_allocated_size;
+            state.allocated_bytes -= size;
+            dealloc(header_ptr as *mut u8, Layout::from_size_align(total_size, 16).unwrap());
+        }
+    }
+    if state.allocated_bytes > state.threshold / 2 { state.threshold *= 2; }
+}
+
+#[no_mangle] pub extern "C" fn lunite_gc_register_root(ptr: *mut u8) { if !ptr.is_null() { get_state().lock().unwrap().roots.insert(ptr as usize); } }
+#[no_mangle] pub extern "C" fn lunite_gc_remove_root(ptr: *mut u8) { if !ptr.is_null() { get_state().lock().unwrap().roots.remove(&(ptr as usize)); } }
+
+// --- Helpers ---
+
 pub fn make_lunite_string(s: &str) -> *mut LuniteString {
     unsafe {
         let len = s.len();
         let data = lunite_alloc(len, ptr::null_mut(), ptr::null_mut());
         ptr::copy_nonoverlapping(s.as_ptr(), data, len);
         let res = lunite_alloc(16, ptr::null_mut(), ptr::null_mut()) as *mut LuniteString;
-        (*res).ptr = data;
-        (*res).len = len;
+        (*res).ptr = data; (*res).len = len;
         res
     }
 }
+
+// --- IO & System ---
 
 #[no_mangle]
 pub extern "C" fn print(s: *const LuniteString) {
@@ -432,25 +400,29 @@ static mut RAND_SEED: u64 = 12345;
 }
 
 #[no_mangle] pub extern "C" fn lunite_arena_save() -> i64 {
-    get_state().lock().unwrap().allocation_order.len() as i64
+    get_state().lock().unwrap().allocation_count as i64
 }
 
-#[no_mangle] pub extern "C" fn lunite_arena_restore(cp: i64) {
+#[no_mangle] pub extern "C" fn lunite_arena_restore(target_count: i64) {
     unsafe {
         let mut to_free = Vec::new();
         {
             let mut state = get_state().lock().unwrap();
-            while state.allocation_order.len() > cp as usize {
-                if let Some(ptr) = state.allocation_order.pop() {
-                    state.allocations.remove(&ptr);
-                    let header = (ptr - HEADER_SIZE) as *mut ObjHeader;
-                    state.allocated_bytes -= (*header).size;
-                    to_free.push(ptr);
-                }
+            while state.allocation_count > target_count as usize {
+                if let Some(ptr) = state.tail.as_mut() {
+                    let header_ptr = ptr as *mut ObjHeader;
+                    let user_ptr = (header_ptr as usize) + HEADER_SIZE;
+                    let prev = (*header_ptr).prev;
+                    state.tail = prev;
+                    if !prev.is_null() { (*prev).next = ptr::null_mut(); } else { state.head = ptr::null_mut(); }
+                    state.allocations.remove(&user_ptr);
+                    state.allocation_count -= 1;
+                    state.allocated_bytes -= (*header_ptr).size;
+                    to_free.push(header_ptr);
+                } else { break; }
             }
         }
-        for ptr in to_free {
-            let header_ptr = (ptr - HEADER_SIZE) as *mut ObjHeader;
+        for header_ptr in to_free {
             let total_size = (*header_ptr).actual_allocated_size;
             dealloc(header_ptr as *mut u8, Layout::from_size_align(total_size, 16).unwrap());
         }

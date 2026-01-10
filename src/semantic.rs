@@ -486,12 +486,24 @@ impl SemanticAnalyzer {
                     if local_path.exists() {
                         found_path = Some(local_path);
                     } else {
-                        // 2. Check in library paths
-                        for lib_dir in &self.lib_paths {
-                            let lib_try = lib_dir.join(&imp_path);
-                            if lib_try.exists() {
-                                found_path = Some(lib_try);
-                                break;
+                        // 2. Check in 'lib/' directory
+                        let lib_try = PathBuf::from("lib").join(&imp_path);
+                        if lib_try.exists() {
+                            found_path = Some(lib_try);
+                        } else {
+                            // 3. Check in 'std/' directory (thư viện tiêu chuẩn của Lunite)
+                            let std_try = PathBuf::from("std").join(&imp_path);
+                            if std_try.exists() {
+                                found_path = Some(std_try);
+                            } else {
+                                // 4. Check in other library paths provided via CLI
+                                for lib_dir in &self.lib_paths {
+                                    let lib_try = lib_dir.join(&imp_path);
+                                    if lib_try.exists() {
+                                        found_path = Some(lib_try);
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
