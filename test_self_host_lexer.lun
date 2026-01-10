@@ -1,41 +1,18 @@
-extern fn lunite_str_at(s: string, idx: int) -> int
-extern fn lunite_str_len_runtime(s: string) -> int
-
-pub struct Lexer {
-    pub input: string,
-    pub pos: int,
-    pub read_pos: int,
-    pub ch: int
-}
-
-impl Lexer {
-    pub fn create(input: string) -> Lexer {
-        let l = Lexer {
-            input: input,
-            pos: 0,
-            read_pos: 0,
-            ch: 0
-        };
-        // Trong Lunite hiện tại, gọi method trong impl có khi cũng tạch
-        // Nên em sẽ làm mọi thứ phẳng nhất có thể
-        return l;
-    }
-}
+import "std/lexer.lun" as lex
+import "std/token.lun" as tok
 
 fn main() {
-    let source = "ABC";
-    print("Source:");
+    let source = "struct Test";
+    print("Tokenizing source:");
     print(source);
     
-    // Gọi hàm static của struct bằng tên mangled hoặc gọi trực tiếp nếu compiler hỗ trợ
-    // Vì Lexer.create bị fail, em sẽ dùng Struct Init trực tiếp trong main
-    let l = Lexer {
-        input: source,
-        pos: 0,
-        read_pos: 0,
-        ch: 0
-    };
+    // Gọi hàm static của struct thông qua Module Alias
+    let l = lex.Lexer.new(source);
+    let t1 = l.next_token();
     
-    print("Lexer created via Struct Init.");
-    print("SUCCESS");
+    // In ra để kiểm tra
+    print("First token line:");
+    lunite_print_int(t1.line);
+    
+    print("SUCCESS: Generics and Module Alias are working!");
 }

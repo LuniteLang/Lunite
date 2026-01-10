@@ -9,12 +9,12 @@ pub struct Lexer {
     pub ch: int,
     pub line: int,
     pub col: int,
-    pub keywords: map.Map
+    pub keywords: map.Map<string, tok.TokenKind>
 }
 
 impl Lexer {
     pub fn new(input: string) -> Lexer {
-        let kw = map.Map.new();
+        let kw = map.Map<string, tok.TokenKind>.new();
         kw.put("fn", tok.TokenKind::TokFn);
         kw.put("let", tok.TokenKind::TokLet);
         kw.put("return", tok.TokenKind::TokReturn);
@@ -134,21 +134,6 @@ impl Lexer {
         if (c == 44) { return tok.Token { kind: tok.TokenKind::TokComma, line: cur_l, column: cur_c }; }
         if (c == 59) { return tok.Token { kind: tok.TokenKind::TokSemicolon, line: cur_l, column: cur_c }; }
         if (c == 63) { return tok.Token { kind: tok.TokenKind::TokQuestion, line: cur_l, column: cur_c }; }
-        if (c == 38) {
-            if (self.ch == 38) {
-                self.read_char();
-                return tok.Token { kind: tok.TokenKind::TokAndAnd, line: cur_l, column: cur_c };
-            }
-            return tok.Token { kind: tok.TokenKind::TokAmpersand, line: cur_l, column: cur_c };
-        }
-        if (c == 124) {
-            if (self.ch == 124) {
-                self.read_char();
-                return tok.Token { kind: tok.TokenKind::TokPipePipe, line: cur_l, column: cur_c };
-            }
-            return tok.Token { kind: tok.TokenKind::TokPipe, line: cur_l, column: cur_c };
-        }
-        if (c == 94) { return tok.Token { kind: tok.TokenKind::TokCaret, line: cur_l, column: cur_c }; }
         
         if (self.is_letter_val(c)) {
             let ident = self.read_identifier_with_start(c);
@@ -162,7 +147,7 @@ impl Lexer {
     }
 
     pub fn is_letter_val(self: Lexer, c: int) -> bool {
-        return (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c == 95);
+        return (c >= 97 && c <= 122) | (c >= 65 && c <= 90) | (c == 95);
     }
 
     pub fn read_identifier_with_start(self: Lexer, start_ch: int) -> string {
