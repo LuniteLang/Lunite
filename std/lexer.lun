@@ -45,11 +45,11 @@ impl Lexer {
         kw.put("comptime", tok.TokenKind::TokComptime);
         kw.put("spawn", tok.TokenKind::TokSpawn);
         kw.put("sizeof", tok.TokenKind::TokSizeof);
-        kw.put("int", tok.TokenKind::TypeInt);
-        kw.put("float", tok.TokenKind::TypeFloat);
-        kw.put("bool", tok.TokenKind::TypeBool);
-        kw.put("string", tok.TokenKind::TypeString);
-        kw.put("void", tok.TokenKind::TypeVoid);
+        kw.put("int", tok.TokenKind::Int);
+        kw.put("float", tok.TokenKind::Float);
+        kw.put("bool", tok.TokenKind::Bool);
+        kw.put("string", tok.TokenKind::StringType);
+        kw.put("void", tok.TokenKind::Void);
 
         let l = Lexer {
             input: input,
@@ -134,27 +134,74 @@ impl Lexer {
         if (c == 44) { return tok.Token { kind: tok.TokenKind::TokComma, line: cur_l, column: cur_c }; }
         if (c == 59) { return tok.Token { kind: tok.TokenKind::TokSemicolon, line: cur_l, column: cur_c }; }
         if (c == 63) { return tok.Token { kind: tok.TokenKind::TokQuestion, line: cur_l, column: cur_c }; }
+        if (c == 38) {
+            if (self.ch == 38) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokAndAnd, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokAmpersand, line: cur_l, column: cur_c };
+        }
+        if (c == 124) {
+            if (self.ch == 124) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokPipePipe, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokPipe, line: cur_l, column: cur_c };
+        }
+        if (c == 94) { return tok.Token { kind: tok.TokenKind::TokCaret, line: cur_l, column: cur_c }; }
+        if (c == 34) { // "
+            return tok.Token { kind: tok.TokenKind::TokStringLiteral(self.read_string()), line: cur_l, column: cur_c };
+        }
         
         if (self.is_letter_val(c)) {
             let ident = self.read_identifier_with_start(c);
             if (self.keywords.contains(ident)) {
                 return tok.Token { kind: self.keywords.get(ident), line: cur_l, column: cur_c };
             }
-            return tok.Token { kind: tok.TokenKind::Identifier(ident), line: cur_l, column: cur_c };
+            return tok.Token { kind: tok.TokenKind::TokIdentifier(ident), line: cur_l, column: cur_c };
         }
 
-        return tok.Token { kind: tok.TokenKind::Illegal, line: cur_l, column: cur_c };
+        if (self.is_digit_val(c)) {
+            return tok.Token { kind: self.read_number_token_with_start(c), line: cur_l, column: cur_c };
+        }
+
+        return tok.Token { kind: tok.TokenKind::TokIllegal, line: cur_l, column: cur_c };
     }
 
     pub fn is_letter_val(self: Lexer, c: int) -> bool {
         return (c >= 97 && c <= 122) | (c >= 65 && c <= 90) | (c == 95);
     }
 
+    pub fn is_digit_val(self: Lexer, c: int) -> bool {
+        return (c >= 48 && c <= 57);
+    }
+
     pub fn read_identifier_with_start(self: Lexer, start_ch: int) -> string {
         let start_pos = self.pos - 1;
-        while (self.is_letter_val(self.ch) | (self.ch >= 48 && self.ch <= 57)) {
+        while (self.is_letter_val(self.ch) | self.is_digit_val(self.ch)) {
             self.read_char();
         }
         return str.sub(self.input, start_pos, self.pos);
+    }
+
+    pub fn read_number_token_with_start(self: Lexer, start_ch: int) -> tok.TokenKind {
+        let start_pos = self.pos - 1;
+        while (self.is_digit_val(self.ch)) {
+            self.read_char();
+        }
+        return tok.TokenKind::TokIntLiteral(0);
+    }
+
+    pub fn read_string(self: Lexer) -> string {
+        let start_pos = self.pos;
+        while (self.ch != 34 && self.ch != 0) {
+            if (self.ch == 92) { // \
+                self.read_char();
+            }
+            self.read_char();
+        }
+        let lit = str.sub(self.input, start_pos, self.pos);
+        self.read_char(); // skip closing "
+        return lit;
     }
 }

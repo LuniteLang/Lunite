@@ -1,5 +1,5 @@
 extern fn lunite_alloc(size: int, p: int, f: int) -> *T
-extern fn lunite_realloc(ptr: *int, old_size: int, new_size: int) -> *T
+extern fn lunite_realloc(ptr: *int, old_size: int, new_size: int) -> *int
 extern fn lunite_array_copy(src: *int, dst: *int, count: int, elem_size: int) -> void
 
 pub struct List<T> {

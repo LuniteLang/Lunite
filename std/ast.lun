@@ -1,0 +1,47 @@
+import "list.lun" as list
+import "token.lun" as tok
+
+pub enum Type {
+    Int,
+    Float,
+    Bool,
+    String,
+    Void,
+    Custom(string, list.List<Type>),
+    Pointer(Type)
+}
+
+pub enum ExpressionKind {
+    IntLiteral(int),
+    FloatLiteral(float),
+    StringLiteral(string),
+    Identifier(string),
+    Binary(Expression, tok.TokenKind, Expression),
+    Unary(tok.TokenKind, Expression),
+    Call(Expression, list.List<Expression>)
+}
+
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub typ: Type
+}
+
+pub enum Statement {
+    Let(string, Type, Expression),
+    Assign(Expression, Expression),
+    Return(Expression),
+    If(Expression, list.List<Statement>, list.List<Statement>),
+    While(Expression, list.List<Statement>),
+    Expr(Expression)
+}
+
+pub struct FunctionDecl {
+    pub name: string,
+    pub params: list.List<MapEntry>, // Cần MapEntry cho name:type
+    pub return_type: Type,
+    pub body: list.List<Statement>
+}
+
+pub struct Program {
+    pub functions: list.List<FunctionDecl>
+}

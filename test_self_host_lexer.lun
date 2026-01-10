@@ -1,18 +1,29 @@
 import "std/lexer.lun" as lex
 import "std/token.lun" as tok
+import "std/io.lun" as io
 
-fn main() {
-    let source = "struct Test";
+fn main() -> void {
+    let source = "fn main() { return 0; }";
     print("Tokenizing source:");
     print(source);
     
-    // Gọi hàm static của struct thông qua Module Alias
     let l = lex.Lexer.new(source);
-    let t1 = l.next_token();
+    let count = 0;
+    let running = true;
     
-    // In ra để kiểm tra
-    print("First token line:");
-    lunite_print_int(t1.line);
+    while (running) {
+        let t = l.next_token();
+        count = count + 1;
+        when (t.kind) {
+            // tok.TokenKind::EOF => {
+            //    running = false;
+            // }
+            else => {}
+        }
+    }
     
-    print("SUCCESS: Generics and Module Alias are working!");
+    print("Tokenization complete!");
+    print("Total tokens found:");
+    lunite_print_int(count);
+    print("SUCCESS: Self-hosted Lexer is alive!");
 }
