@@ -1,0 +1,20 @@
+struct Resource { id: int }
+
+fn crash() {
+    print("About to crash...")
+    throw "BOOM!"
+}
+
+fn test_unwind() {
+    print("Allocating Resource...")
+    let r = Resource { id: 100 }
+    
+    crash()
+    
+    print("This should not print")
+}
+
+fn main() -> int {
+    test_unwind()
+    return 0
+}

@@ -1,0 +1,29 @@
+import "std/lexer.lun" as lex
+import "std/token.lun" as tok
+import "std/string.lun" as str
+
+fn main() {
+    print("--- SELF-HOSTING LEXER TEST ---");
+    let input = "let x = 10;";
+    print("Input:");
+    print(input);
+    
+    let l = lex.Lexer.new(input);
+    
+    let done = 0;
+    while (done == 0) {
+        let t = l.next_token();
+        
+        let lit_len = str.length(t.literal);
+        
+        // Manual EOF check by literal empty
+        if (lit_len == 0) { 
+            print("Token: EOF");
+            done = 1; 
+        } else {
+            print("Token Literal:");
+            print(t.literal);
+        }
+        print("---");
+    }
+}

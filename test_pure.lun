@@ -1,0 +1,15 @@
+extern fn lunite_sys_system(cmd: string) -> int
+
+pure fn safe_calc(a: int, b: int) -> int {
+    return a + b;
+}
+
+pure fn bad_function() {
+    // Calling impure extern function -> Should fail
+    lunite_sys_system("echo hacked");
+}
+
+fn main() {
+    safe_calc(1, 2);
+    bad_function();
+}

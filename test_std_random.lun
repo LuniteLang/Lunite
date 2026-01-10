@@ -1,0 +1,13 @@
+import "std/random.lun" as rand;
+extern fn lunite_print_int(i: int) -> void
+extern fn print(s: string) -> void
+
+fn main() -> int {
+    rand.seed(12345);
+    let r = rand.randint();
+    print("Random: ");
+    lunite_print_int(r);
+    print("\n");
+    return 0;
+}
+

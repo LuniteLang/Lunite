@@ -1,0 +1,11 @@
+struct Node {
+    value: int,
+    next: Node
+}
+
+fn main() -> int {
+    let n1 = Node { value: 1, next: null };
+    let n2 = Node { value: 2, next: n1 };
+    
+    return n2.value;
+}

@@ -1,0 +1,53 @@
+
+fn run_check(filename: &str, lib_paths: Vec<PathBuf>) {
+    let mut analyzer = SemanticAnalyzer::new(lib_paths);
+    match analyzer.analyze_main(PathBuf::from(filename)) {
+        Ok(_) => println!("Check successful. No errors found."),
+        Err(e) => {
+            print_error_report(filename, e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_fmt(filename: &str) {
+    if let Ok(content) = fs::read_to_string(filename) {
+        let mut indent = 0;
+        let mut formatted = String::new();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("}") { indent = indent.saturating_sub(1); }
+            if !trimmed.is_empty() {
+                formatted.push_str(&"    ".repeat(indent));
+                formatted.push_str(trimmed);
+                formatted.push('\n');
+            }
+            if trimmed.ends_with("{") { indent += 1; }
+        }
+        if let Err(e) = fs::write(filename, formatted) {
+            eprintln!("Failed to write formatted file: {}", e);
+        } else {
+            println!("Formatted {}", filename);
+        }
+    } else {
+        eprintln!("Failed to read file {}", filename);
+    }
+}
+
+fn run_doc(filename: &str) {
+    if let Ok(content) = fs::read_to_string(filename) {
+        println!("# Documentation for {}", filename);
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("///") {
+                println!("{}", trimmed.trim_start_matches("///").trim());
+            } else if trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ") {
+                 println!("**Function:** `{}`\n", trimmed.trim_end_matches("{").trim());
+            } else if trimmed.starts_with("struct ") || trimmed.starts_with("pub struct ") {
+                 println!("**Struct:** `{}`\n", trimmed.trim_end_matches("{").trim());
+            }
+        }
+    } else {
+        eprintln!("Failed to read file {}", filename);
+    }
+}

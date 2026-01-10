@@ -1,0 +1,15 @@
+pub struct Listener { dummy: int }
+pub struct Stream { dummy: int }
+
+extern fn lunite_net_bind(port: int) -> Listener
+extern fn lunite_net_accept(l: Listener) -> Stream
+extern fn lunite_net_read(s: Stream) -> string
+extern fn lunite_net_write(s: Stream, data: string) -> void
+extern fn lunite_net_close_socket(s: Stream) -> void
+extern fn lunite_net_close_server(l: Listener) -> void
+
+pub fn bind(port: int) -> Listener { return lunite_net_bind(port); }
+pub fn accept(l: Listener) -> Stream { return lunite_net_accept(l); }
+pub fn read(s: Stream) -> string { return lunite_net_read(s); }
+pub fn write(s: Stream, data: string) { lunite_net_write(s, data); }
+pub fn close(s: Stream) { lunite_net_close_socket(s); }

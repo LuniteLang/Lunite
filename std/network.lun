@@ -1,0 +1,7 @@
+// Placeholder for network module
+fn connect(ip: string, port: int) {
+    print("Connecting to:")
+    print(ip)
+    print("Port:")
+    print(port)
+}

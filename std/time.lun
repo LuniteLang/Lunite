@@ -1,0 +1,5 @@
+extern fn lunite_time_now() -> int
+extern fn lunite_time_sleep(sec: int) -> void
+
+pub fn now() -> int { lunite_time_now() }
+pub fn sleep(sec: int) { lunite_time_sleep(sec) }

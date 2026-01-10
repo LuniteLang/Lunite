@@ -1,0 +1,23 @@
+import "std/time.lun" as time;
+extern fn lunite_print_int(i: int) -> void
+extern fn print(s: string) -> void
+
+fn main() -> int {
+    let start = time.now();
+    print("Start time: ");
+    lunite_print_int(start);
+    print("\n");
+    
+    print("Sleeping 1 sec...\n");
+    time.sleep(1);
+    
+    let end = time.now();
+    print("End time: ");
+    lunite_print_int(end);
+    print("\n");
+    
+    print("Diff: ");
+    lunite_print_int(end - start);
+    print("\n");
+    return 0;
+}

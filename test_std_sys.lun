@@ -1,0 +1,8 @@
+import "std/sys.lun" as sys;
+extern fn print(s: string) -> void
+
+fn main() -> int {
+    print("Executing 'ls -la' via system...");
+    sys.exec("ls -la");
+    return 0;
+}

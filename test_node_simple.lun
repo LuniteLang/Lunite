@@ -1,0 +1,7 @@
+struct Node {
+  id: int,
+}
+fn main() {
+  let n = Node { id: 1 };
+  lunite_print_int(n.id);
+}

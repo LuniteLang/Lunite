@@ -1,0 +1,24 @@
+extern fn print(s: string) -> void
+
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Custom(int)
+}
+
+fn main() -> int {
+    let c = Color::Custom(42);
+    
+    when (c) {
+        Color::Red => print("It is red"),
+        Color::Green => print("It is green"),
+        Color::Blue => print("It is blue"),
+        Color::Custom(v) => {
+            print("It is custom!");
+        },
+        else => print("Unknown color")
+    }
+    
+    return 0;
+}

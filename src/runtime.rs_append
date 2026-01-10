@@ -1,0 +1,29 @@
+
+// --- Encoding ---
+
+#[no_mangle]
+pub extern "C" fn lunite_base64_encode(s: *const LuniteString) -> *mut LuniteString {
+    if s.is_null() { return ptr::null_mut(); }
+    unsafe {
+        let slice = std::slice::from_raw_parts((*s).ptr, (*s).len as usize);
+        let encoded = BASE64_STANDARD.encode(slice);
+        make_lunite_string(&encoded)
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_base64_decode(s: *const LuniteString) -> LuniteResult {
+    if s.is_null() { return LuniteResult { tag: 1, payload: make_lunite_string("Null pointer") as i64 }; }
+    unsafe {
+        let slice = std::slice::from_raw_parts((*s).ptr, (*s).len as usize);
+        let input_str = String::from_utf8_lossy(slice);
+        match BASE64_STANDARD.decode(input_str.trim()) {
+            Ok(bytes) => {
+                // Try to convert to string, or just return raw bytes if we had a byte type (using string for now)
+                let s_out = String::from_utf8_lossy(&bytes);
+                LuniteResult { tag: 0, payload: make_lunite_string(&s_out) as i64 }
+            },
+            Err(e) => LuniteResult { tag: 1, payload: make_lunite_string(&e.to_string()) as i64 }
+        }
+    }
+}

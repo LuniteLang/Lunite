@@ -1,0 +1,10 @@
+fn main() {
+    comptime {
+        let x = 0;
+        // Use parens to avoid generic parsing ambiguity
+        while (x) < 5 {
+            x = x + 1;
+        }
+    }
+    print("Comptime success!");
+}

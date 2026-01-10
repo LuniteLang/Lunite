@@ -1,0 +1,5 @@
+extern fn lunite_sys_exit(code: int) -> void
+extern fn lunite_sys_system(cmd: string) -> int
+
+pub fn exit(code: int) { lunite_sys_exit(code) }
+pub fn exec(cmd: string) -> int { lunite_sys_system(cmd) }

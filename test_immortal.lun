@@ -1,0 +1,33 @@
+struct Node {
+    id: int
+}
+
+fn risky_business(should_throw: bool) {
+    let mut i = 0
+    while (i < 10) {
+        let n = Node { id: i }
+        print("Allocated Node ID: ")
+        lunite_print_int(i)
+        if (should_throw) {
+            if (i == 5) {
+                throw "BOOM!"
+            }
+        }
+        i = i + 1
+    }
+}
+
+fn main() {
+    print("--- Test 1: Normal execution ---")
+    risky_business(false)
+    print("Test 1: Success")
+
+    print("\n--- Test 2: Try/Catch with Rollback ---")
+    try {
+        risky_business(true)
+    } catch e {
+        print("Caught exception: ")
+        print(e)
+    }
+    print("Test 2: System still alive and clean!")
+}

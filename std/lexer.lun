@@ -1,0 +1,161 @@
+import "string.lun" as str
+import "token.lun" as tok
+
+pub struct Lexer {
+    pub input: string,
+    pub position: int,
+    pub read_position: int,
+    pub ch: int
+}
+
+impl Lexer {
+    pub fn new(input: string) -> Lexer {
+        let l = Lexer {
+            input: input,
+            position: 0,
+            read_position: 0,
+            ch: 0
+        };
+        l.read_char();
+        return l;
+    }
+
+    pub fn read_char(self: Lexer) {
+        let len = str.length(self.input);
+        if (self.read_position >= len) {
+            self.ch = 0;
+        } else {
+            self.ch = str.char_at(self.input, self.read_position);
+        }
+        self.position = self.read_position;
+        self.read_position = self.read_position + 1;
+    }
+
+    pub fn next_token(self: Lexer) -> tok.Token {
+        self.skip_whitespace();
+        
+        let token = tok.Token { kind: tok.TokenKind::Illegal, literal: "" };
+        
+        let ch = self.ch;
+        
+        if (ch == 0) {
+            token.kind = tok.TokenKind::EOF;
+            token.literal = "";
+        } else {
+            if (ch == 61) { // =
+                token.kind = tok.TokenKind::Assign;
+                token.literal = "=";
+            } else {
+                if (ch == 43) { // +
+                    token.kind = tok.TokenKind::Plus;
+                    token.literal = "+";
+                } else {
+                    if (ch == 40) { // (
+                        token.kind = tok.TokenKind::LParen;
+                        token.literal = "(";
+                    } else {
+                        if (ch == 41) { // )
+                            token.kind = tok.TokenKind::RParen;
+                            token.literal = ")";
+                        } else {
+                            if (ch == 123) { // {
+                                token.kind = tok.TokenKind::LBrace;
+                                token.literal = "{";
+                            } else {
+                                if (ch == 125) { // }
+                                    token.kind = tok.TokenKind::RBrace;
+                                    token.literal = "}";
+                                } else {
+                                    if (ch == 44) { // ,
+                                        token.kind = tok.TokenKind::Comma;
+                                        token.literal = ",";
+                                    } else {
+                                        if (ch == 59) { // ;
+                                            token.kind = tok.TokenKind::Semicolon;
+                                            token.literal = ";";
+                                        } else {
+                                            if (self.is_letter()) {
+                                                token.literal = self.read_identifier();
+                                                token.kind = self.lookup_ident(token.literal);
+                                                return token;
+                                            } else {
+                                                if (self.is_digit()) {
+                                                    token.kind = tok.TokenKind::Int;
+                                                    token.literal = self.read_number();
+                                                    return token;
+                                                } else {
+                                                    token.kind = tok.TokenKind::Illegal;
+                                                    token.literal = "ILLEGAL";
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        self.read_char();
+        return token;
+    }
+
+    pub fn skip_whitespace(self: Lexer) {
+        // Space(32), Tab(9), LF(10), CR(13)
+        let done = 0;
+        while (done == 0) {
+            let ch = self.ch;
+            if (ch == 32) { self.read_char(); }
+            else {
+                if (ch == 10) { self.read_char(); }
+                else {
+                    if (ch == 9) { self.read_char(); }
+                    else {
+                        if (ch == 13) { self.read_char(); }
+                        else {
+                            done = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn is_letter(self: Lexer) -> bool {
+        let ch = self.ch;
+        if (ch >= 97) { if (ch <= 122) { return true; } }
+        if (ch >= 65) { if (ch <= 90) { return true; } }
+        if (ch == 95) { return true; }
+        return false;
+    }
+
+    pub fn is_digit(self: Lexer) -> bool {
+        let ch = self.ch;
+        if (ch >= 48) { if (ch <= 57) { return true; } }
+        return false;
+    }
+
+    pub fn read_identifier(self: Lexer) -> string {
+        let position = self.position;
+        while (self.is_letter()) {
+            self.read_char();
+        }
+        return str.sub(self.input, position, self.position);
+    }
+
+    pub fn read_number(self: Lexer) -> string {
+        let position = self.position;
+        while (self.is_digit()) {
+            self.read_char();
+        }
+        return str.sub(self.input, position, self.position);
+    }
+
+    pub fn lookup_ident(self: Lexer, ident: string) -> tok.TokenKind {
+        if (ident == "fn") { return tok.TokenKind::Function; }
+        if (ident == "let") { return tok.TokenKind::Let; }
+        return tok.TokenKind::Ident;
+    }
+}

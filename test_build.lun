@@ -1,0 +1,4 @@
+fn main() -> int {
+    print("Build Automation Works!");
+    return 0;
+}

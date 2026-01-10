@@ -1,0 +1,12 @@
+extern fn print(s: string) -> void
+
+fn main() -> int {
+    let a = 10;
+    let b = 20;
+    if (a < b) {
+        print("a is less than b");
+    } else {
+        print("a is not less than b");
+    }
+    return 0;
+}

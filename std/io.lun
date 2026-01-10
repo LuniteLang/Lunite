@@ -1,0 +1,5 @@
+extern fn lunite_io_read_file(path: string) -> string
+
+pub fn read_file(path: string) -> string {
+    return lunite_io_read_file(path);
+}

@@ -1,0 +1,24 @@
+use "std/encoding.lun"
+use "std/io.lun"
+
+fn safe_decode(s: string) -> string {
+    let r = base64_decode(s)
+    let v = try r
+    return v
+}
+
+pub fn main() -> int {
+    let original = "Hello, Hacker!"
+    let encoded = base64_encode(original)
+    print("Encoded: " + encoded)
+    
+    let decoded = safe_decode(encoded)
+    print("Decoded: " + decoded)
+    
+    if original == decoded {
+        print("Success")
+    } else {
+        print("Failure")
+    }
+    return 0
+}

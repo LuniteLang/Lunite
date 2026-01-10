@@ -1,0 +1,16 @@
+import "lib_math.lun"
+
+native fn printf(fmt: string, val: int) -> int
+
+fn main() {
+    let sum = add(10, 20)
+    print("Sum from module: ")
+    lunite_print_int(sum)
+    
+    let p = create_point(1, 2)
+    print("Point x: ")
+    lunite_print_int(p.x)
+    
+    print("Testing FFI printf: ")
+    printf("Value of sum is: %d\n", sum)
+}

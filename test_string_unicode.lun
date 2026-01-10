@@ -1,0 +1,25 @@
+import "std/string.lun" as str
+
+fn main() {
+    print("Testing String Manipulation & Unicode...")
+    
+    let s = "Hello Lunite! [Rocket]"
+    print("Original:")
+    print(s)
+    
+    let sub = str.sub(s, 0, 5)
+    print("Substring (0,5):")
+    print(sub)
+    
+    if (sub == "Hello") {
+        print("Substring test passed.")
+    }
+
+    let c = str.concat("Mã ", "nguồn")
+    print("Concat Unicode:")
+    print(c)
+    
+    let char = str.char_at("ABC", 1)
+    print("Char at 1 (B=66):")
+    lunite_print_int(char)
+}

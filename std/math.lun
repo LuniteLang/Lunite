@@ -1,0 +1,9 @@
+extern fn lunite_math_pow(base: float, exp: float) -> float
+extern fn lunite_math_abs(n: float) -> float
+extern fn lunite_math_ceil(n: float) -> float
+extern fn lunite_math_floor(n: float) -> float
+
+pub fn pow(base: float, exp: float) -> float { return lunite_math_pow(base, exp) }
+pub fn abs(n: float) -> float { return lunite_math_abs(n) }
+pub fn ceil(n: float) -> float { return lunite_math_ceil(n) }
+pub fn floor(n: float) -> float { return lunite_math_floor(n) }

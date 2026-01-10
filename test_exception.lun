@@ -1,0 +1,15 @@
+extern fn print(s: string) -> void
+
+fn risky() -> void {
+    throw "Something went wrong!";
+}
+
+fn main() -> int {
+    try {
+        risky();
+    } catch e {
+        print("Caught exception: ");
+        print(e);
+    }
+    return 0;
+}

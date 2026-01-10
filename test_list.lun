@@ -1,0 +1,25 @@
+import "std/list.lun" as list
+
+fn main() {
+    print("--- TEST LIST<INT> ---");
+    let my_list = list.List<int>.new(0);
+    
+    print("Pushing 10, 20, 30...");
+    my_list.push(10);
+    my_list.push(20);
+    my_list.push(30);
+    
+    let len = my_list.len();
+    print("Length (Expect 3):");
+    lunite_print_int(len);
+    
+    let val = my_list.get(1); 
+    print("Value at index 1 (Expect 20):");
+    lunite_print_int(val);
+    
+    if val == 20 {
+        print("List Test PASS");
+    } else {
+        print("List Test FAIL");
+    }
+}

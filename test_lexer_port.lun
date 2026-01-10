@@ -1,0 +1,34 @@
+import "std/lexer.lun" as lex
+import "std/io.lun" as io
+import "std/token.lun" as tok
+
+fn main() {
+    print("Testing Self-Hosted Lexer Port...")
+    let content = io.read_file("std/token.lun")
+    if (content == "") {
+        print("Error: Could not read file")
+        return
+    }
+
+    let l = lex.Lexer.new(content)
+    let count = 0
+    let running = 1
+    
+    while (running == 1) {
+        let t = l.next_token()
+        when (t.kind) {
+            tok.TokenKind::EOF => {
+                running = 0
+            }
+            else => {
+                count = count + 1
+            }
+        }
+        
+        if (count > 1000) { running = 0 } // Safety break
+    }
+    
+    print("Tokens found in std/token.lun:")
+    lunite_print_int(count)
+    print("Lexer port test finished.")
+}

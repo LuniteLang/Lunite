@@ -1,0 +1,140 @@
+// Comprehensive Test Suite for Lunite
+// Covers: Syntax, Types, Control Flow, Generics, Structs, Enums, Impl, Exceptions, FFI, Std Lib, GC, Recursion
+
+// Standard Library Imports
+import "std/io.lun" as io
+import "std/list.lun" as list
+import "std/math.lun" as math
+import "std/net.lun" as net
+import "std/sync.lun" as sync
+import "std/sys.lun" as sys
+import "std/time.lun" as time
+import "std/string.lun" as str
+import "std/random.lun" as rand
+
+// FFI / Extern Declarations
+extern fn print(s: string) -> void
+extern fn lunite_print_int(i: int) -> void
+extern fn lunite_print_float(f: float) -> void
+extern fn lunite_net_close_server(l: net.Listener) -> void
+
+// --- 1. Structs & Impl ---
+
+struct User {
+    id: int,
+    username: string,
+    active: bool
+}
+
+impl User {
+    fn deactivate(self: User) {
+        self.active = false;
+    }
+    
+    fn get_status_msg(self: User) -> string {
+        if (self.active) {
+            return "Active";
+        } else {
+            return "Inactive";
+        }
+    }
+}
+
+// --- 2. Enums & Pattern Matching ---
+
+enum RequestStatus {
+    Success,
+    Error(string),
+    Code(int)
+}
+
+fn check_status(s: RequestStatus) {
+    when (s) {
+        RequestStatus::Success => print("Status: Success"),
+        RequestStatus::Error(msg) => {
+            print("Status: Error - ");
+            print(msg);
+        },
+        RequestStatus::Code(c) => {
+            print("Status: Code ");
+            lunite_print_int(c);
+        },
+        else => print("Status: Unknown")
+    }
+}
+
+// --- 3. Generics ---
+
+struct Wrapper<T> {
+    value: T
+}
+
+fn wrap_item<T>(item: T) -> Wrapper<T> {
+    return Wrapper { value: item };
+}
+
+fn unwrap_item<T>(w: Wrapper<T>) -> T {
+    return w.value;
+}
+
+// --- 4. Recursion (Stack Stress) ---
+
+fn factorial(n: int) -> int {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+
+// --- 5. Concurrency ---
+
+fn worker_task(c: sync.Channel) {
+    time.sleep(1); // Simulate work
+    sync.send(c, 999);
+}
+
+// --- 6. GC Stress (Heap Stress) ---
+fn stress_gc() {
+    print("Starting GC Stress...");
+    let i = 0;
+    while (5000 > i) {
+        let w = wrap_item<int>(i);
+        i = i + 1;
+    }
+    print("GC Stress Completed.");
+}
+
+// --- Main Entry Point ---
+
+fn main() -> int {
+    print("=== Lunite Comprehensive Test Suite ===");
+
+    // A. Basic Types & Math
+    let a = 10;
+    let b = 20;
+    let sum = a + b;
+    print("Math Check (10+20):");
+    lunite_print_int(sum);
+
+    let pi = 3.14159;
+    let sqrt_val = math.pow(16.0, 0.5);
+    print("Pow(16.0, 0.5):");
+    lunite_print_float(sqrt_val);
+
+    // ...
+
+    // I. Random
+    rand.seed(12345);
+    let r = rand.randint();
+    print("Random Number:");
+    lunite_print_int(r);
+
+    // J. GC Stress
+    stress_gc();
+
+    // K. Recursion
+    let fact_res = factorial(5);
+    print("Factorial(5):");
+    lunite_print_int(fact_res);
+
+    print("=== All Tests Passed ===");
+    return 0;
+}

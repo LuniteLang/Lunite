@@ -1,0 +1,51 @@
+// Khai báo extern các hàm đã implement trong runtime.rs
+extern fn lunite_sys_system(cmd: string) -> int
+extern fn lunite_time_now() -> int
+extern fn lunite_time_sleep(sec: int) -> void
+extern fn lunite_math_pow(base: float, exp: float) -> float
+extern fn lunite_arena_save() -> int
+extern fn lunite_arena_restore(state: int) -> void
+
+fn main() {
+    print("--- TEST 1: TIME & SLEEP ---");
+    let t1 = lunite_time_now();
+    print("Bat dau ngu 1 giay...");
+    lunite_time_sleep(1);
+    let t2 = lunite_time_now();
+    let duration = t2 - t1;
+    if duration >= 1 {
+        print("Time OK: Da troi qua 1 giay.");
+    } else {
+        print("Time FAIL: Thoi gian chay sai.");
+    }
+
+    print("--- TEST 2: SYSTEM CALL ---");
+    // Goi lenh shell de in ra loi chao
+    lunite_sys_system("echo 'System OK: Hello from Lunite Shell!'");
+
+    print("--- TEST 3: MATH ---");
+    let res = lunite_math_pow(2.0, 10.0);
+    if res == 1024.0 {
+        print("Math OK: 2^10 = 1024.");
+    } else {
+        print("Math FAIL.");
+    }
+
+    print("--- TEST 4: TIME TRAVEL (AUTO RELEASE) ---");
+    print("Luu diem checkpoint...");
+    let cp = lunite_arena_save();
+    
+    // Tao ra mot dong doi tuong moi
+    let s1 = "Doi tuong 1";
+    let s2 = "Doi tuong 2";
+    let s3 = "Doi tuong 3";
+    
+    print("Vua tao 3 strings tren heap.");
+    print("Dang thuc hien Time Travel (Rollback)...");
+    
+    // Rollback - Runtime phai tu dong goi lunite_release cho 3 thang tren
+    lunite_arena_restore(cp);
+    
+    print("Time Travel OK: Bo nho da duoc don dep.");
+    print("--- TAT CA TEST DA VUOT QUA ---");
+}

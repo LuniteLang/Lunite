@@ -1,0 +1,25 @@
+struct Vec3 { x: float, y: float, z: float }
+
+fn main() -> int {
+    print("--- Region Memory Test ---")
+    
+    // Alloc on heap (Standard)
+    let v1 = Vec3 { x: 1.0, y: 2.0, z: 3.0 }
+    
+    region {
+        print(">> Entering Region")
+        // Alloc in arena (Should log Alloc, but NO Free when v2 out of scope inside region)
+        // Actually, v2 goes out of scope at end of region block.
+        // But lunite_free will be called, and it should be NO-OP.
+        let v2 = Vec3 { x: 4.0, y: 5.0, z: 6.0 }
+        
+        region {
+            print(">> Entering Nested Region")
+            let v3 = Vec3 { x: 7.0, y: 8.0, z: 9.0 }
+        }
+        print("<< Exited Nested")
+    }
+    
+    print("<< Exited Region")
+    return 0
+}

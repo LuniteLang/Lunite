@@ -1,0 +1,19 @@
+struct Node {
+    next: Node,
+    id: int
+}
+
+fn main() {
+    let mut n: Node = null;
+    if n == null {
+        print("Success: n is null\n");
+    }
+    
+    n = Node { next: null, id: 1 };
+    if n != null {
+        print("Success: n is not null\n");
+    }
+    
+    n = null; // Should release the old node
+    print("Assigning null done\n");
+}

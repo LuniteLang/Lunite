@@ -1,0 +1,30 @@
+fn main() -> int {
+    print("--- Generic Array Test ---")
+    
+    // 1. Integer Array
+    let mut nums = [10, 20, 30]
+    
+    print("Initial Len:")
+    print(nums.len)
+    
+    print("Pushing 40...")
+    nums.push(40)
+    
+    print("New Len:")
+    print(nums.len)
+    
+    print("Element at 3:")
+    print(nums[3])
+    
+    // 2. String Array
+    print("--- String Array ---")
+    let mut names = ["Alice", "Bob"]
+    
+    print("Pushing Charlie...")
+    names.push("Charlie")
+    
+    print("Element at 2:")
+    print(names[2])
+    
+    return 0
+}

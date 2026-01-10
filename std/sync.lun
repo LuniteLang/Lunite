@@ -1,0 +1,19 @@
+pub struct Channel {
+    dummy: int
+}
+
+extern fn lunite_channel_create() -> Channel
+extern fn lunite_channel_send(c: Channel, v: int) -> void
+extern fn lunite_channel_recv(c: Channel) -> int
+
+pub fn new_channel() -> Channel {
+    return lunite_channel_create();
+}
+
+pub fn send(c: Channel, v: int) {
+    lunite_channel_send(c, v);
+}
+
+pub fn recv(c: Channel) -> int {
+    return lunite_channel_recv(c);
+}

@@ -1,0 +1,32 @@
+import "std/list.lun" as list
+
+fn main() {
+    print("Size of int:")
+    lunite_print_int(sizeof(int))
+    print("Size of string:")
+    lunite_print_int(sizeof(string))
+
+    print("Testing Dynamic List<int>...")
+    let li = list.List<int>.new(0)
+    let i = 0
+    while (500 > i) {
+        li.push(i)
+        i = i + 1
+    }
+    print("List<int> count:")
+    lunite_print_int(li.len())
+
+    print("Testing Dynamic List<string>...")
+    let ls = list.List<string>.new("")
+    let j = 0
+    while (200 > j) {
+        ls.push("item")
+        j = j + 1
+    }
+    print("List<string> count:")
+    lunite_print_int(ls.len())
+    
+    if (li.get(499) == 499) {
+        print("List dynamic growth verified.")
+    }
+}

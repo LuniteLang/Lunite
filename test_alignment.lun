@@ -1,0 +1,10 @@
+struct AlignTest {
+    flag1: bool,
+    data: int,
+    flag2: bool,
+}
+
+fn main() {
+    let a = AlignTest { flag1: true, data: 42, flag2: false };
+    lunite_print_int(a.data);
+}

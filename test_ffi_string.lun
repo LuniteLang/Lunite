@@ -1,0 +1,6 @@
+extern fn print(s: string) -> void
+
+fn main() -> int {
+    print("Hello from Lunite FFI String Bridge!");
+    return 0;
+}

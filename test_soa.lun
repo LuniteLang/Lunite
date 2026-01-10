@@ -1,0 +1,12 @@
+layout(soa) struct Point {
+    x: int,
+    y: int
+}
+
+fn main() -> int {
+    let pts: [Point, 10];
+    pts[0].x = 42;
+    pts[0].y = 100;
+    
+    return pts[0].x + pts[0].y;
+}

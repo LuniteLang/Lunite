@@ -1,0 +1,12 @@
+fn main() -> int {
+    print("--- Pointer Test ---")
+    let x = 10
+    let p: *int = &x
+    
+    if *p == 10 { print("Read *p: PASS") } else { print("Read *p: FAIL") }
+    
+    *p = 20
+    if x == 20 { print("Write *p: PASS") } else { print("Write *p: FAIL") }
+    
+    return 0
+}

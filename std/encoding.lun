@@ -1,0 +1,10 @@
+extern fn lunite_base64_encode(s: string) -> string
+extern fn lunite_base64_decode(s: string) -> Result<string>
+
+pub fn base64_encode(s: string) -> string {
+    return lunite_base64_encode(s);
+}
+
+pub fn base64_decode(s: string) -> Result<string> {
+    return lunite_base64_decode(s);
+}

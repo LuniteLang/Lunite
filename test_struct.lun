@@ -1,0 +1,8 @@
+struct Simple {
+  data: int,
+}
+
+fn main() {
+  let s = Simple { data: 123 };
+  lunite_print_int(s.data);
+}

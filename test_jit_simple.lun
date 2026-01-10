@@ -1,0 +1,6 @@
+extern fn lunite_sys_exit(code: int) -> void
+
+fn main() -> int {
+    lunite_sys_exit(0);
+    return 0;
+}

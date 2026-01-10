@@ -1,0 +1,16 @@
+import "std/io.lun" as io
+import "std/string.lun" as str
+
+fn main() {
+    let filename = "test_self_host_step1.lun";
+    print("Reading self...");
+    
+    let content = io.read_file(filename);
+    let len = str.length(content);
+    
+    print("File length:");
+    lunite_print_int(len);
+    
+    print("Content preview:");
+    print(content);
+}

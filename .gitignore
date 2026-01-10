@@ -1,0 +1,20 @@
+# Rust
+/target/
+/.cargo/
+
+# Build output
+runtime_build/
+*.o
+*.a
+*.so
+*.exe
+
+# Logs
+*.log
+
+# Test binaries (giữ .lun, bỏ binary)
+test_*
+!*.lun
+
+# OS
+.DS_Store

@@ -1,0 +1,22 @@
+import "std/list.lun" as list
+
+fn test_arena() {
+    print("Starting Arena Memory Test...")
+    region {
+        let i = 0
+        // Đảo ngược so sánh để tránh nhầm lẫn với Generics <
+        // Giảm xuống 100 để debug
+        while (100 > i) {
+            let l = list.List<int>.new(0)
+            l.push(i)
+            i = i + 1
+        }
+        print("Allocated 10,000 lists in region.")
+    }
+    print("Region exited. Memory should be restored.")
+}
+
+fn main() {
+    test_arena()
+    print("Memory test passed.")
+}

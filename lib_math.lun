@@ -1,0 +1,17 @@
+struct Point {
+    x: int
+    y: int
+    secret: int
+}
+
+pub fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+pub fn create_point(x: int, y: int) -> Point {
+    return Point { x: x, y: y, secret: 42 }
+}
+
+fn private_helper() -> int {
+    return 1337
+}

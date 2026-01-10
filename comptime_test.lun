@@ -1,0 +1,21 @@
+fn main() -> int {
+    print("--- Comptime Test ---")
+    
+    // Test 1: Comptime Arithmetic
+    let x = comptime {
+        let a = 10
+        let b = 20
+        a * b + 5
+    }
+    
+    if x == 205 { print("Comptime Calc: PASS") } else { print("Comptime Calc: FAIL") }
+    
+    // Test 2: Comptime Logic
+    let check_val = comptime {
+        true
+    }
+    
+    if (check_val) { print("Comptime Bool: PASS") } else { print("Comptime Bool: FAIL") }
+    
+    return 0
+}

@@ -1,0 +1,21 @@
+pub enum TokenKind {
+    Illegal,
+    EOF,
+    Ident,
+    Int,
+    Assign,
+    Plus,
+    Comma,
+    Semicolon,
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    Function,
+    Let
+}
+
+pub struct Token {
+    pub kind: TokenKind,
+    pub literal: string
+}

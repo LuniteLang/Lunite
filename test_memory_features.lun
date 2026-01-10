@@ -1,0 +1,44 @@
+extern fn lunite_collect_cycles() -> void
+
+struct Node {
+    next: Node, 
+    id: int
+}
+
+fn create_cycle() {
+    // Create cycle: A -> B -> A
+    // A.next starts null.
+    let a = Node { next: null, id: 10 };
+    // B.next -> A
+    let b = Node { next: a, id: 20 };
+    
+    // A.next -> B.
+    // NOTE: In Lunite, structs are reference types. 
+    // Mutating 'a.next' mutates the object on heap.
+    a.next = b;
+    
+    print("Cycle created: Node(10) <-> Node(20)");
+    // Function exit -> a and b dropped -> Ref counts decrement.
+    // But since they reference each other, RC won't reach 0.
+    // They become "Purple" candidates.
+}
+
+fn main() {
+    print("--- TEST 1: REGION ---");
+    region {
+        print("Entering region...");
+        let n1 = Node { next: null, id: 1 };
+        print("Created Node 1 inside region.");
+    }
+    print("Exited region. Node 1 should be freed (Check DEBUG logs).");
+
+    print("--- TEST 2: CYCLE DETECTION ---");
+    create_cycle();
+    
+    print("Function exited. Triggering Cycle Collector...");
+    
+    lunite_collect_cycles();
+    
+    print("If successful, you should see DEBUG Freeing logs for 2 nodes.");
+    print("Test Complete.");
+}

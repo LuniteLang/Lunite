@@ -1,0 +1,27 @@
+import "std/sync.lun" as sync
+
+fn worker(c: sync.Channel) {
+    print("Worker: Started. Sending 42...");
+    sync.send(c, 42);
+    print("Worker: Done.");
+}
+
+fn main() {
+    print("Main: Creating channel...");
+    let c = sync.new_channel();
+    
+    print("Main: Spawning worker...");
+    spawn worker(c);
+    
+    print("Main: Waiting for data...");
+    let val = sync.recv(c);
+    
+    print("Main: Received:");
+    lunite_print_int(val);
+    
+    if val == 42 {
+        print("Concurrency PASS");
+    } else {
+        print("Concurrency FAIL");
+    }
+}

@@ -1,0 +1,5 @@
+extern fn lunite_rand_int() -> int
+extern fn lunite_srand(seed: int) -> void
+
+pub fn randint() -> int { return lunite_rand_int() }
+pub fn seed(s: int) { lunite_srand(s) }

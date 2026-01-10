@@ -1,0 +1,30 @@
+layout(soa) struct Particles {
+    x: float,
+    y: float
+}
+
+fn main() -> int {
+    print("--- SoA Layout Test ---")
+    
+    // 1. Create SoA Array
+    let p = Particles { x: 1.0, y: 2.0 }
+    let arr = [p; 3] 
+    
+    // 2. Read (Gather)
+    let p0 = arr[0]
+    let p1 = arr[1]
+    
+    // 3. Verify Gather
+    if p0.x == 1.0 { print("p0.x is correct (1.0)") } else { print("p0.x is WRONG") }
+    if p0.y == 2.0 { print("p0.y is correct (2.0)") } else { print("p0.y is WRONG") }
+    
+    // 4. Write (Scatter)
+    print("Testing Scatter...")
+    let p_new = Particles { x: 10.0, y: 20.0 }
+    arr[0] = p_new
+    
+    let p_check = arr[0]
+    if p_check.x == 10.0 { print("Scatter success (10.0)") } else { print("Scatter FAIL") }
+    
+    return 0
+}

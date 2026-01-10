@@ -1,0 +1,22 @@
+struct Node {
+  next: Node,
+  id: int,
+}
+
+native fn lunite_collect_cycles();
+
+fn main() {
+    print("Starting main\n");
+    {
+        let mut n1 = Node { next: null, id: 1 };
+        let mut n2 = Node { next: null, id: 2 };
+        
+        n1.next = n2;
+        n2.next = n1;
+        
+        print("Cycle created\n");
+    }
+    print("Out of scope. Collecting...\n");
+    lunite_collect_cycles();
+    print("Done.\n");
+}
