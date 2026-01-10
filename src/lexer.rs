@@ -208,11 +208,21 @@ impl<'a> Lexer<'a> {
                 }
                 '&' => {
                     self.advance();
-                    TokenKind::Ampersand
+                    if self.peek() == Some('&') {
+                        self.advance();
+                        TokenKind::AndAnd
+                    } else {
+                        TokenKind::Ampersand
+                    }
                 }
                 '|' => {
                     self.advance();
-                    TokenKind::Pipe
+                    if self.peek() == Some('|') {
+                        self.advance();
+                        TokenKind::PipePipe
+                    } else {
+                        TokenKind::Pipe
+                    }
                 }
                 '^' => {
                     self.advance();

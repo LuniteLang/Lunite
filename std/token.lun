@@ -1,21 +1,37 @@
 pub enum TokenKind {
     Illegal,
     EOF,
-    Ident,
-    Int,
-    Assign,
-    Plus,
-    Comma,
-    Semicolon,
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Function,
-    Let
+    Identifier(string),
+    IntLiteral(int),
+    FloatLiteral(float),
+    StringLiteral(string),
+    
+    // Operators
+    TokPlus, TokMinus, TokStar, TokSlash, TokPercent,
+    TokEqual, TokEqualEqual,
+    TokBang, TokBangEqual,
+    TokLess, TokLessEqual, TokGreater, TokGreaterEqual,
+    TokAmpersand, TokPipe, TokCaret, TokLessLess, TokGreaterGreater,
+    TokQuestion,
+    
+    // Punctuation
+    TokLParen, TokRParen, TokLBrace, TokRBrace, TokLBracket, TokRBracket,
+    TokColon, TokColonColon, TokComma, TokDot, TokArrow, TokFatArrow,
+    TokSemicolon, TokNewline,
+
+    // Keywords
+    TokFn, TokLet, TokReturn, TokIf, TokElse, TokWhile, TokFor, TokIn,
+    TokStruct, TokEnum, TokImpl, TokUse, TokImport, TokExtern, TokNative,
+    TokPub, TokPure, TokTry, TokCatch, TokThrow,
+    TokTrue, TokFalse, TokNull, TokMut, TokWhen, TokAs,
+    TokRegion, TokComptime, TokSpawn, TokSizeof,
+    
+    // Types
+    TypeInt, TypeFloat, TypeBool, TypeString, TypeVoid
 }
 
 pub struct Token {
     pub kind: TokenKind,
-    pub literal: string
+    pub line: int,
+    pub column: int
 }

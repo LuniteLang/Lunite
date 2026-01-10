@@ -1,161 +1,175 @@
 import "string.lun" as str
 import "token.lun" as tok
+import "map.lun" as map
 
 pub struct Lexer {
     pub input: string,
-    pub position: int,
-    pub read_position: int,
-    pub ch: int
+    pub pos: int,
+    pub read_pos: int,
+    pub ch: int,
+    pub line: int,
+    pub col: int,
+    pub keywords: map.Map
 }
 
 impl Lexer {
     pub fn new(input: string) -> Lexer {
+        let kw = map.Map.new();
+        kw.put("fn", tok.TokenKind::TokFn);
+        kw.put("let", tok.TokenKind::TokLet);
+        kw.put("return", tok.TokenKind::TokReturn);
+        kw.put("if", tok.TokenKind::TokIf);
+        kw.put("else", tok.TokenKind::TokElse);
+        kw.put("while", tok.TokenKind::TokWhile);
+        kw.put("for", tok.TokenKind::TokFor);
+        kw.put("in", tok.TokenKind::TokIn);
+        kw.put("struct", tok.TokenKind::TokStruct);
+        kw.put("enum", tok.TokenKind::TokEnum);
+        kw.put("impl", tok.TokenKind::TokImpl);
+        kw.put("use", tok.TokenKind::TokUse);
+        kw.put("import", tok.TokenKind::TokImport);
+        kw.put("extern", tok.TokenKind::TokExtern);
+        kw.put("native", tok.TokenKind::TokNative);
+        kw.put("pub", tok.TokenKind::TokPub);
+        kw.put("pure", tok.TokenKind::TokPure);
+        kw.put("try", tok.TokenKind::TokTry);
+        kw.put("catch", tok.TokenKind::TokCatch);
+        kw.put("throw", tok.TokenKind::TokThrow);
+        kw.put("true", tok.TokenKind::TokTrue);
+        kw.put("false", tok.TokenKind::TokFalse);
+        kw.put("null", tok.TokenKind::TokNull);
+        kw.put("mut", tok.TokenKind::TokMut);
+        kw.put("when", tok.TokenKind::TokWhen);
+        kw.put("as", tok.TokenKind::TokAs);
+        kw.put("region", tok.TokenKind::TokRegion);
+        kw.put("comptime", tok.TokenKind::TokComptime);
+        kw.put("spawn", tok.TokenKind::TokSpawn);
+        kw.put("sizeof", tok.TokenKind::TokSizeof);
+        kw.put("int", tok.TokenKind::TypeInt);
+        kw.put("float", tok.TokenKind::TypeFloat);
+        kw.put("bool", tok.TokenKind::TypeBool);
+        kw.put("string", tok.TokenKind::TypeString);
+        kw.put("void", tok.TokenKind::TypeVoid);
+
         let l = Lexer {
             input: input,
-            position: 0,
-            read_position: 0,
-            ch: 0
+            pos: 0,
+            read_pos: 0,
+            ch: 0,
+            line: 1,
+            col: 0,
+            keywords: kw
         };
         l.read_char();
         return l;
     }
 
     pub fn read_char(self: Lexer) {
-        let len = str.length(self.input);
-        if (self.read_position >= len) {
+        let input_len = str.length(self.input);
+        if (self.read_pos >= input_len) {
             self.ch = 0;
         } else {
-            self.ch = str.char_at(self.input, self.read_position);
+            self.ch = str.char_at(self.input, self.read_pos);
         }
-        self.position = self.read_position;
-        self.read_position = self.read_position + 1;
+        self.pos = self.read_pos;
+        self.read_pos = self.read_pos + 1;
+        if (self.ch == 10) {
+            self.line = self.line + 1;
+            self.col = 0;
+        } else {
+            self.col = self.col + 1;
+        }
+    }
+
+    pub fn skip_whitespace(self: Lexer) {
+        while ((self.ch == 32) | (self.ch == 9) | (self.ch == 13) | (self.ch == 10)) {
+            self.read_char();
+        }
     }
 
     pub fn next_token(self: Lexer) -> tok.Token {
         self.skip_whitespace();
+        let cur_l = self.line;
+        let cur_c = self.col;
         
-        let token = tok.Token { kind: tok.TokenKind::Illegal, literal: "" };
-        
-        let ch = self.ch;
-        
-        if (ch == 0) {
-            token.kind = tok.TokenKind::EOF;
-            token.literal = "";
-        } else {
-            if (ch == 61) { // =
-                token.kind = tok.TokenKind::Assign;
-                token.literal = "=";
-            } else {
-                if (ch == 43) { // +
-                    token.kind = tok.TokenKind::Plus;
-                    token.literal = "+";
-                } else {
-                    if (ch == 40) { // (
-                        token.kind = tok.TokenKind::LParen;
-                        token.literal = "(";
-                    } else {
-                        if (ch == 41) { // )
-                            token.kind = tok.TokenKind::RParen;
-                            token.literal = ")";
-                        } else {
-                            if (ch == 123) { // {
-                                token.kind = tok.TokenKind::LBrace;
-                                token.literal = "{";
-                            } else {
-                                if (ch == 125) { // }
-                                    token.kind = tok.TokenKind::RBrace;
-                                    token.literal = "}";
-                                } else {
-                                    if (ch == 44) { // ,
-                                        token.kind = tok.TokenKind::Comma;
-                                        token.literal = ",";
-                                    } else {
-                                        if (ch == 59) { // ;
-                                            token.kind = tok.TokenKind::Semicolon;
-                                            token.literal = ";";
-                                        } else {
-                                            if (self.is_letter()) {
-                                                token.literal = self.read_identifier();
-                                                token.kind = self.lookup_ident(token.literal);
-                                                return token;
-                                            } else {
-                                                if (self.is_digit()) {
-                                                    token.kind = tok.TokenKind::Int;
-                                                    token.literal = self.read_number();
-                                                    return token;
-                                                } else {
-                                                    token.kind = tok.TokenKind::Illegal;
-                                                    token.literal = "ILLEGAL";
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if (self.ch == 0) {
+            return tok.Token { kind: tok.TokenKind::EOF, line: cur_l, column: cur_c };
         }
         
+        let c = self.ch;
         self.read_char();
-        return token;
-    }
 
-    pub fn skip_whitespace(self: Lexer) {
-        // Space(32), Tab(9), LF(10), CR(13)
-        let done = 0;
-        while (done == 0) {
-            let ch = self.ch;
-            if (ch == 32) { self.read_char(); }
-            else {
-                if (ch == 10) { self.read_char(); }
-                else {
-                    if (ch == 9) { self.read_char(); }
-                    else {
-                        if (ch == 13) { self.read_char(); }
-                        else {
-                            done = 1;
-                        }
-                    }
-                }
+        if (c == 43) { return tok.Token { kind: tok.TokenKind::TokPlus, line: cur_l, column: cur_c }; }
+        if (c == 45) {
+            if (self.ch == 62) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokArrow, line: cur_l, column: cur_c };
             }
+            return tok.Token { kind: tok.TokenKind::TokMinus, line: cur_l, column: cur_c };
         }
+        if (c == 42) { return tok.Token { kind: tok.TokenKind::TokStar, line: cur_l, column: cur_c }; }
+        if (c == 47) { return tok.Token { kind: tok.TokenKind::TokSlash, line: cur_l, column: cur_c }; }
+        if (c == 61) {
+            if (self.ch == 61) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokEqualEqual, line: cur_l, column: cur_c };
+            }
+            if (self.ch == 62) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokFatArrow, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokEqual, line: cur_l, column: cur_c };
+        }
+        if (c == 40) { return tok.Token { kind: tok.TokenKind::TokLParen, line: cur_l, column: cur_c }; }
+        if (c == 41) { return tok.Token { kind: tok.TokenKind::TokRParen, line: cur_l, column: cur_c }; }
+        if (c == 123) { return tok.Token { kind: tok.TokenKind::TokLBrace, line: cur_l, column: cur_c }; }
+        if (c == 125) { return tok.Token { kind: tok.TokenKind::TokRBrace, line: cur_l, column: cur_c }; }
+        if (c == 58) {
+            if (self.ch == 58) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokColonColon, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokColon, line: cur_l, column: cur_c };
+        }
+        if (c == 44) { return tok.Token { kind: tok.TokenKind::TokComma, line: cur_l, column: cur_c }; }
+        if (c == 59) { return tok.Token { kind: tok.TokenKind::TokSemicolon, line: cur_l, column: cur_c }; }
+        if (c == 63) { return tok.Token { kind: tok.TokenKind::TokQuestion, line: cur_l, column: cur_c }; }
+        if (c == 38) {
+            if (self.ch == 38) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokAndAnd, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokAmpersand, line: cur_l, column: cur_c };
+        }
+        if (c == 124) {
+            if (self.ch == 124) {
+                self.read_char();
+                return tok.Token { kind: tok.TokenKind::TokPipePipe, line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::TokPipe, line: cur_l, column: cur_c };
+        }
+        if (c == 94) { return tok.Token { kind: tok.TokenKind::TokCaret, line: cur_l, column: cur_c }; }
+        
+        if (self.is_letter_val(c)) {
+            let ident = self.read_identifier_with_start(c);
+            if (self.keywords.contains(ident)) {
+                return tok.Token { kind: self.keywords.get(ident), line: cur_l, column: cur_c };
+            }
+            return tok.Token { kind: tok.TokenKind::Identifier(ident), line: cur_l, column: cur_c };
+        }
+
+        return tok.Token { kind: tok.TokenKind::Illegal, line: cur_l, column: cur_c };
     }
 
-    pub fn is_letter(self: Lexer) -> bool {
-        let ch = self.ch;
-        if (ch >= 97) { if (ch <= 122) { return true; } }
-        if (ch >= 65) { if (ch <= 90) { return true; } }
-        if (ch == 95) { return true; }
-        return false;
+    pub fn is_letter_val(self: Lexer, c: int) -> bool {
+        return (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c == 95);
     }
 
-    pub fn is_digit(self: Lexer) -> bool {
-        let ch = self.ch;
-        if (ch >= 48) { if (ch <= 57) { return true; } }
-        return false;
-    }
-
-    pub fn read_identifier(self: Lexer) -> string {
-        let position = self.position;
-        while (self.is_letter()) {
+    pub fn read_identifier_with_start(self: Lexer, start_ch: int) -> string {
+        let start_pos = self.pos - 1;
+        while (self.is_letter_val(self.ch) | (self.ch >= 48 && self.ch <= 57)) {
             self.read_char();
         }
-        return str.sub(self.input, position, self.position);
-    }
-
-    pub fn read_number(self: Lexer) -> string {
-        let position = self.position;
-        while (self.is_digit()) {
-            self.read_char();
-        }
-        return str.sub(self.input, position, self.position);
-    }
-
-    pub fn lookup_ident(self: Lexer, ident: string) -> tok.TokenKind {
-        if (ident == "fn") { return tok.TokenKind::Function; }
-        if (ident == "let") { return tok.TokenKind::Let; }
-        return tok.TokenKind::Ident;
+        return str.sub(self.input, start_pos, self.pos);
     }
 }

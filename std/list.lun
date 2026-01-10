@@ -1,15 +1,15 @@
 extern fn lunite_alloc(size: int, p: int, f: int) -> *T
-extern fn lunite_realloc(ptr: *T, old_size: int, new_size: int) -> *T
-extern fn lunite_array_copy(src: *T, dst: *T, count: int, elem_size: int) -> void
+extern fn lunite_realloc(ptr: *int, old_size: int, new_size: int) -> *T
+extern fn lunite_array_copy(src: *int, dst: *int, count: int, elem_size: int) -> void
 
 pub struct List<T> {
-    data: *T,
-    count: int,
-    capacity: int
+    pub data: *T,
+    pub count: int,
+    pub capacity: int
 }
 
 impl<T> List<T> {
-    pub fn new(init: T) -> List<T> {
+    pub fn new() -> List<T> {
         let initial_cap = 10;
         let p = lunite_alloc(initial_cap * sizeof(T), 0, 0); 
         return List<T> {
@@ -24,7 +24,7 @@ impl<T> List<T> {
         if (c >= self.capacity) {
             let old_cap = self.capacity;
             let new_cap = old_cap * 2;
-            self.data = lunite_realloc(self.data, old_cap * sizeof(T), new_cap * sizeof(T));
+            self.data = lunite_realloc(self.data as *int, old_cap * sizeof(T), new_cap * sizeof(T)) as *T;
             self.capacity = new_cap;
         }
         self.data[c] = val;

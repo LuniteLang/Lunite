@@ -11,6 +11,8 @@ use crate::CompileError;
 enum Precedence {
     Lowest,
     Assign,
+    PipePipe,
+    AndAnd,
     Equals,
     BitOr,
     BitXor,
@@ -28,6 +30,8 @@ enum Precedence {
 
 fn precedence_of(kind: &TokenKind) -> Precedence {
     match kind {
+        TokenKind::PipePipe => Precedence::PipePipe,
+        TokenKind::AndAnd => Precedence::AndAnd,
         TokenKind::EqualEqual | TokenKind::BangEqual => Precedence::Equals,
         TokenKind::Less | TokenKind::Greater | TokenKind::LessEqual | TokenKind::GreaterEqual => {
             Precedence::LessGreater
@@ -616,6 +620,7 @@ impl<'a> Parser<'a> {
             }
 
             let pattern = self.parse_when_pattern()?;
+            self.next_token();
             if !self.cur_is(&TokenKind::FatArrow) {
                 return Err(self.cur_error("Expected '=>' after pattern"));
             }
@@ -648,7 +653,6 @@ impl<'a> Parser<'a> {
 
     fn parse_when_pattern(&mut self) -> Result<WhenPattern, CompileError> {
         if self.cur_is(&TokenKind::Else) {
-            self.next_token();
             return Ok(WhenPattern::Else);
         }
 
@@ -670,17 +674,16 @@ impl<'a> Parser<'a> {
                     self.next_token(); // last part of name
                     self.next_token(); // ::
                     let variant_name = self.expect_identifier_string()?;
-                    self.next_token(); // variant
 
                     let mut binding = None;
-                    if self.cur_is(&TokenKind::LParen) {
+                    if self.peek_is(&TokenKind::LParen) {
+                        self.next_token(); // variant
                         self.next_token(); // (
                         binding = Some(self.expect_identifier_string()?);
                         self.next_token(); // binding
                         if !self.cur_is(&TokenKind::RParen) {
                             return Err(self.cur_error("Expected ')'"));
                         }
-                        self.next_token(); // )
                     }
                     return Ok(WhenPattern::EnumVariant {
                         enum_name,
@@ -692,7 +695,6 @@ impl<'a> Parser<'a> {
         }
 
         let expr = self.parse_expression(Precedence::Lowest)?;
-        self.next_token();
         Ok(WhenPattern::Literal(expr))
     }
 
@@ -884,8 +886,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 if self.peek_is(&TokenKind::Less) {
-                    self.next_token();
+                    self.next_token(); // move to <
                     let args = self.parse_type_arguments()?;
+                    if !self.cur_is(&TokenKind::Greater) {
+                        return Err(self.cur_error("Expected '>' after generic type arguments"));
+                    }
+                    self.next_token(); // consume >
                     Ok(Type::Custom(n, args))
                 } else {
                     Ok(Type::Custom(n, vec![]))
@@ -1030,6 +1036,7 @@ impl<'a> Parser<'a> {
             match self.parse_type_arguments() {
                 Ok(args) => {
                     if self.cur_is(&TokenKind::Greater) {
+                        self.next_token(); // consume >
                         expr = Expression::GenericSpecialization {
                             expression: Box::new(expr),
                             type_args: args,
@@ -1083,16 +1090,15 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 self.next_token();
                 let variant = self.expect_identifier_string()?;
-                self.next_token();
                 let mut value = None;
-                if self.cur_is(&TokenKind::LParen) {
-                    self.next_token();
+                if self.peek_is(&TokenKind::LParen) {
+                    self.next_token(); // consume variant
+                    self.next_token(); // (
                     value = Some(Box::new(self.parse_expression(Precedence::Lowest)?));
                     self.next_token();
                     if !self.cur_is(&TokenKind::RParen) {
                         return Err(self.cur_error("Expected ')'"));
                     }
-                    self.next_token();
                 }
                 let (_, type_args) = match expr {
                     Expression::GenericSpecialization { type_args, .. } => ((), type_args),
@@ -1200,8 +1206,10 @@ impl<'a> Parser<'a> {
             | TokenKind::LessLess
             | TokenKind::GreaterGreater
             | TokenKind::Ampersand
-            | TokenKind::Caret
-            | TokenKind::Pipe => {
+            | TokenKind::AndAnd
+            | TokenKind::Pipe
+            | TokenKind::PipePipe
+            | TokenKind::Caret => {
                 self.next_token();
                 Ok(Expression::Binary {
                     left: Box::new(left),

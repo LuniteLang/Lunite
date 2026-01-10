@@ -622,8 +622,8 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     TokenKind::LessEqual => if is_f { Ok(self.gen.builder.build_float_compare(FloatPredicate::OLE, lv.into_float_value(), rv.into_float_value(), "").unwrap().into()) } else { Ok(self.gen.builder.build_int_compare(IntPredicate::SLE, lv.into_int_value(), rv.into_int_value(), "").unwrap().into()) },
                     TokenKind::GreaterEqual => if is_f { Ok(self.gen.builder.build_float_compare(FloatPredicate::OGE, lv.into_float_value(), rv.into_float_value(), "").unwrap().into()) } else { Ok(self.gen.builder.build_int_compare(IntPredicate::SGE, lv.into_int_value(), rv.into_int_value(), "").unwrap().into()) },
                     TokenKind::Percent => Ok(self.gen.builder.build_int_signed_rem(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
-                    TokenKind::Ampersand => Ok(self.gen.builder.build_and(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
-                    TokenKind::Pipe => Ok(self.gen.builder.build_or(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
+                    TokenKind::Ampersand | TokenKind::AndAnd => Ok(self.gen.builder.build_and(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
+                    TokenKind::Pipe | TokenKind::PipePipe => Ok(self.gen.builder.build_or(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
                     TokenKind::Caret => Ok(self.gen.builder.build_xor(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
                     TokenKind::LessLess => Ok(self.gen.builder.build_left_shift(lv.into_int_value(), rv.into_int_value(), "").unwrap().into()),
                     TokenKind::GreaterGreater => Ok(self.gen.builder.build_right_shift(lv.into_int_value(), rv.into_int_value(), true, "").unwrap().into()), // arithmetic shift right (sign extension)
