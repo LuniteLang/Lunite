@@ -534,6 +534,32 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 Ok(cast.into())
             }
             TExpressionKind::EnumInit { enum_name, variant_name: _, value, tag } => {
+                if enum_name == "Result" {
+                    let i64_t = self.gen.context.i64_type();
+                    let i32_t = self.gen.context.i32_type();
+                    let st_ty = self.gen.context.struct_type(&[i32_t.into(), i64_t.into()], false);
+                    let mut st_val = st_ty.get_undef();
+                    
+                    st_val = self.gen.builder.build_insert_value(st_val, i32_t.const_int(*tag as u64, false), 0, "tag").unwrap().into_struct_value();
+                    
+                    let payload = if let Some(v) = value {
+                        let val = self.compile_expression(v)?;
+                        self.emit_retain(val, &v.typ);
+                        if val.is_pointer_value() {
+                            self.gen.builder.build_ptr_to_int(val.into_pointer_value(), i64_t, "payload").unwrap()
+                        } else if val.is_float_value() {
+                            self.gen.builder.build_bit_cast(val.into_float_value(), i64_t, "payload").unwrap().into_int_value()
+                        } else {
+                            val.into_int_value()
+                        }
+                    } else {
+                        i64_t.const_zero()
+                    };
+                    
+                    st_val = self.gen.builder.build_insert_value(st_val, payload, 1, "payload").unwrap().into_struct_value();
+                    return Ok(st_val.into());
+                }
+
                 let et = self.gen.enum_types.get(enum_name).unwrap();
                 let ptr = self.gen.builder.build_call(self.gen.module.get_function("lunite_alloc").unwrap(), &[et.size_of().unwrap().into(), self.gen.context.ptr_type(AddressSpace::default()).const_null().into(), self.gen.context.ptr_type(AddressSpace::default()).const_null().into()], "eptr").unwrap().try_as_basic_value().left().unwrap().into_pointer_value();
                 let cast = self.gen.builder.build_bit_cast(ptr, et.ptr_type(AddressSpace::default()), "ecast").unwrap().into_pointer_value();

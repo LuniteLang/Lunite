@@ -744,11 +744,11 @@ impl SemanticAnalyzer {
                                  return Err(self.cur_error(&format!("Try operator error type mismatch: Expected {:?}, got {:?}", cur_err, err)));
                              }
                          } else {
-                             return Err(self.cur_error("Try operator used in function that does not return Result"));
+                             return Err(self.cur_error("The try operator '?' can only be used in functions that return a Result type."));
                          }
                          Ok(TExpression { kind: TExpressionKind::Try { expression: Box::new(te) }, typ: *ok.clone() })
                     },
-                    _ => Err(self.cur_error("Try operator '?' only works on Result types"))
+                    _ => Err(self.cur_error("The try operator '?' can only be applied to expressions of type Result."))
                 }
             }
             Expression::Call { function, args, type_args } => {
@@ -878,42 +878,26 @@ impl SemanticAnalyzer {
             Expression::ArrayLiteral { elements } => { let mut tes = Vec::new(); for e in elements { tes.push(self.analyze_expression(e)?); } let elem_typ = if let Some(first) = tes.first() { first.typ.clone() } else { Type::Void }; let size = tes.len() as u32; Ok(TExpression { kind: TExpressionKind::ArrayLiteral { elements: tes }, typ: Type::Array(Box::new(elem_typ), size) }) }
             Expression::ArrayRepeat { value, size } => { let te = self.analyze_expression(*value)?; let t_typ = te.typ.clone(); Ok(TExpression { kind: TExpressionKind::ArrayRepeat { value: Box::new(te), size }, typ: Type::Array(Box::new(t_typ), size as u32) }) }
             Expression::EnumInit { enum_name, variant_name, value, type_args } => {
-                let mangled = if let Some(pos) = enum_name.find('.') { let alias = &enum_name[..pos]; let real_mod = self.current_imports.get(alias).ok_or_else(|| self.cur_error("Module not found"))?; format!("{}_{}", real_mod, &enum_name[pos+1..]) } else { format!("{}_{}", self.current_module_name, enum_name) };
-                
-                // Check if it is actually a Struct Static Method Call (mis-parsed as EnumInit)
-                // Check if 'mangled' exists in structs or generic_structs
-                let is_struct = self.structs.contains_key(&mangled) || self.generic_structs.iter().any(|(k, _)| mangled.ends_with(k));
-                
-                if is_struct {
-                     let concrete_name = if !type_args.is_empty() {
-                         let mut mangled_args = Vec::new();
-                         for t in &type_args { mangled_args.push(self.mangle_type(t.clone())); }
-                         let instantiated = self.instantiate_struct(&mangled, &mangled_args)?;
-                         self.process_instantiation_queue()?; instantiated
-                     } else { mangled.clone() };
-                     
-                     let mangled_method = format!("{}_{}", concrete_name, variant_name);
-                     if let Some((_, ret, _, is_pure, _)) = self.functions.get(&mangled_method).cloned() {
-                         if self.in_pure_context && !is_pure { return Err(self.cur_error("Pure call impure")); }
-                         let mut args = Vec::new();
-                         if let Some(v) = value { args.push(self.analyze_expression(*v)?); }
-                         return Ok(TExpression { kind: TExpressionKind::Call { function: mangled_method, args }, typ: ret });
-                     }
-                }
-
                 if enum_name == "Result" {
-                     let tag = if variant_name == "Ok" { 0 } else { 1 };
-                     let t_val = if let Some(v) = value { Some(Box::new(self.analyze_expression(*v)?)) } else { None };
-                     
-                     let result_type = if type_args.len() == 2 {
-                         Type::Result(Box::new(self.mangle_type(type_args[0].clone())), Box::new(self.mangle_type(type_args[1].clone())))
-                     } else {
-                         // Fallback or Error? Ideally error. For now, Int/String default to avoid blocking.
-                         Type::Result(Box::new(Type::Int), Box::new(Type::String))
-                     };
+                    let tag = if variant_name == "Ok" { 0 } else { 1 };
+                    let t_val = if let Some(v) = value { Some(Box::new(self.analyze_expression(*v)?)) } else { None };
+                    
+                    let result_type = if type_args.len() == 2 {
+                        Type::Result(Box::new(self.mangle_type(type_args[0].clone())), Box::new(self.mangle_type(type_args[1].clone())))
+                    } else {
+                        Type::Result(Box::new(Type::Int), Box::new(Type::String))
+                    };
 
-                     return Ok(TExpression { kind: TExpressionKind::EnumInit { enum_name: "Result".to_string(), variant_name, value: t_val, tag }, typ: result_type });
+                    return Ok(TExpression { kind: TExpressionKind::EnumInit { enum_name: "Result".to_string(), variant_name, value: t_val, tag }, typ: result_type });
                 }
+
+                let mangled = if let Some(pos) = enum_name.find('.') {
+                    let alias = &enum_name[..pos];
+                    let real_mod = self.current_imports.get(alias).ok_or_else(|| self.cur_error("Module not found"))?;
+                    format!("{}_{}", real_mod, &enum_name[pos+1..])
+                } else {
+                    format!("{}_{}", self.current_module_name, enum_name)
+                };
 
                 let mut tag = 0; if let Some(ed) = self.enum_decls_global.get(&mangled) { if let Some(pos) = ed.variants.iter().position(|v| v.name == variant_name) { tag = pos as u32; } }
                 let t_val = if let Some(v) = value { Some(Box::new(self.analyze_expression(*v)?)) } else { None };
