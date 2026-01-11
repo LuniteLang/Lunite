@@ -1,14 +1,17 @@
 import "std/string.lun" as str
 import "std/lexer.lun" as lex
+import "std/token.lun" as tok
+import "std/parser.lun" as par
+import "std/ast.lun" as ast
+import "std/codegen_c.lun" as cg
 
 fn main() {
-    lunite_print_int(1);
-    print("Self-Hosting Compiler - Initial Phase");
-    lunite_print_int(2);
-    let source = "fn hello() {}";
-    lunite_print_int(3);
-    print("Creating Lexer...");
+    let source = "fn main() { print(\"Hello, World!\"); }";
     let l = lex.create(source);
-    lunite_print_int(4);
-    print("Lexer created.");
+    let p = par.create(l);
+    
+    let prog = p.parse_program();
+    let gen = cg.create();
+    let code = gen.generate(prog);
+    print(code);
 }

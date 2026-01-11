@@ -58,7 +58,7 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
 }
 
 #[no_mangle]
-pub extern "C" fn print(s: *const LuniteString) {
+pub extern "C" fn lunite_print(s: *const LuniteString) {
     if s.is_null() {
         println!("(null)");
         return;
@@ -71,6 +71,11 @@ pub extern "C" fn print(s: *const LuniteString) {
         let slice = std::slice::from_raw_parts((*s).ptr, (*s).len);
         println!("{}", String::from_utf8_lossy(slice));
     }
+}
+
+#[no_mangle]
+pub extern "C" fn print(s: *const LuniteString) {
+    lunite_print(s);
 }
 
 #[no_mangle]

@@ -1859,19 +1859,6 @@ impl SemanticAnalyzer {
                                 sn.clone()
                             };
                             let mangled_method = format!("{}_{}", concrete_sn, field);
-                            if !self.functions.contains_key(&mangled_method) {
-                                // Try local prefix
-                                let local = format!(
-                                    "{}_{}_{}",
-                                    self.current_module_name, concrete_sn, field
-                                );
-                                if !self.functions.contains_key(&local) {
-                                    eprintln!(
-                                        "[SEM] Method NOT FOUND: {} or {}",
-                                        mangled_method, local
-                                    );
-                                }
-                            }
                             if self.functions.contains_key(&mangled_method) {
                                 let mut tas = vec![tobj];
                                 for a in args {
@@ -1933,10 +1920,6 @@ impl SemanticAnalyzer {
                         if let TExpressionKind::Identifier(n) = &fe.kind {
                             (n.clone(), (**ret).clone())
                         } else {
-                            eprintln!(
-                                "[SEM] Invalid call (Function type but not Identifier): {:?}",
-                                fe.kind
-                            );
                             return Err(self.cur_error("Invalid call"));
                         }
                     }
@@ -1944,7 +1927,6 @@ impl SemanticAnalyzer {
                         if let TExpressionKind::Identifier(n) = &fe.kind {
                             (n.clone(), Type::Void)
                         } else {
-                            eprintln!("[SEM] Invalid call (Not Identifier and not Function): {:?} (typ: {:?})", fe.kind, fe.typ);
                             return Err(self.cur_error("Invalid call"));
                         }
                     }
