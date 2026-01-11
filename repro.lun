@@ -1,0 +1,5 @@
+import "std/token.lun" as tok
+fn main() {
+    let x = tok.TokenKind::TokElse;
+    print("TokElse is ok");
+}

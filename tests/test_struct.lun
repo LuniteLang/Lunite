@@ -1,0 +1,6 @@
+struct Lexer {
+    input: string
+}
+
+fn main() {
+}

@@ -1,0 +1,16 @@
+enum Kind {
+    Value(int),
+    Name(string),
+    Other
+}
+
+fn main() {
+    let k1 = Kind::Value(100);
+    let k2 = Kind::Name("Lunite");
+    let k3 = Kind::Other;
+
+    if (k1 == k1) { print("k1 == k1 ok"); }
+    if (k1 != k2) { print("k1 != k2 ok"); }
+    
+    print("Enum payload test complete!");
+}

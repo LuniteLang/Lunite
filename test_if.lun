@@ -1,0 +1,14 @@
+fn main() {
+    if (1 > 0) {
+        print("True");
+    } else {
+        print("False");
+    }
+    
+    if (0 > 1) {
+        print("Never");
+    }
+    else {
+        print("Always");
+    }
+}

@@ -2,6 +2,7 @@ extern fn lunite_str_concat(s1: string, s2: string) -> string
 extern fn lunite_str_at(s: string, idx: int) -> int
 extern fn lunite_str_len_runtime(s: string) -> int
 extern fn lunite_str_substring(s: string, start: int, end: int) -> string
+extern fn print(s: string) -> void
 
 pub fn concat(s1: string, s2: string) -> string {
     return lunite_str_concat(s1, s2);
@@ -17,4 +18,8 @@ pub fn length(s: string) -> int {
 
 pub fn sub(s: string, start: int, end: int) -> string {
     return lunite_str_substring(s, start, end);
+}
+
+pub fn print(s: string) {
+    print(s);
 }

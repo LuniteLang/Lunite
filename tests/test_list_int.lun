@@ -1,0 +1,11 @@
+import "std/list.lun" as list
+
+fn main() {
+    let l = list.List<int>.new();
+    l.push(10);
+    l.push(20);
+    let v = l.get(0);
+    lunite_print_int(v);
+    let v2 = l.get(1);
+    lunite_print_int(v2);
+}

@@ -12,6 +12,7 @@ pub enum TokenKind {
     TokBang, TokBangEqual,
     TokLess, TokLessEqual, TokGreater, TokGreaterEqual,
     TokAmpersand, TokPipe, TokCaret, TokLessLess, TokGreaterGreater,
+    TokAndAnd, TokPipePipe,
     TokQuestion,
     
     // Punctuation
@@ -27,7 +28,7 @@ pub enum TokenKind {
     TokRegion, TokComptime, TokSpawn, TokSizeof,
     
     // Types
-    TypeInt, TypeFloat, TypeBool, TypeString, TypeVoid
+    TypeInt, TypeFloat, TypeBool, KindString, TypeVoid
 }
 
 pub struct Token {

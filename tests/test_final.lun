@@ -1,0 +1,7 @@
+import "std/lexer.lun" as lex
+
+fn main() {
+    let s = "hi";
+    let l = lex.Lexer.new(s);
+    print("OK");
+}

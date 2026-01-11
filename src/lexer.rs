@@ -1,5 +1,6 @@
 use crate::token::{Token, TokenKind};
 
+#[derive(Clone)]
 pub struct Lexer<'a> {
     input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,

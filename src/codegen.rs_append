@@ -1,0 +1,62 @@
+            TStatement::When { subject, arms } => {
+                let subj_val = self.compile_expression(subject)?;
+                let end_bb = self.gen.context.append_basic_block(self.fn_value, "when_end");
+                
+                for arm in arms {
+                    let next_arm_bb = self.gen.context.append_basic_block(self.fn_value, "when_next");
+                    let body_bb = self.gen.context.append_basic_block(self.fn_value, "when_body");
+                    
+                    match &arm.pattern {
+                        TWhenPattern::Else => {
+                            self.gen.builder.build_unconditional_branch(body_bb).unwrap();
+                        }
+                        TWhenPattern::Literal(lit) => {
+                            let lv = self.compile_expression(lit)?;
+                            let is_match = if subj_val.is_int_value() {
+                                self.gen.builder.build_int_compare(IntPredicate::EQ, subj_val.into_int_value(), lv.into_int_value(), "match").unwrap()
+                            } else {
+                                let s = self.gen.builder.build_ptr_to_int(subj_val.into_pointer_value(), self.gen.context.i64_type(), "s").unwrap();
+                                let l = self.gen.builder.build_ptr_to_int(lv.into_pointer_value(), self.gen.context.i64_type(), "l").unwrap();
+                                self.gen.builder.build_int_compare(IntPredicate::EQ, s, l, "match").unwrap()
+                            };
+                            self.gen.builder.build_conditional_branch(is_match, body_bb, next_arm_bb).unwrap();
+                        }
+                        TWhenPattern::EnumVariant { enum_name, tag, binding, .. } => {
+                            let et = self.gen.enum_types.get(enum_name).unwrap();
+                            let tag_ptr = self.gen.builder.build_struct_gep(*et, subj_val.into_pointer_value(), 0, "tptr").unwrap();
+                            let actual_tag = self.gen.builder.build_load(self.gen.context.i32_type(), tag_ptr, "tag").unwrap().into_int_value();
+                            let is_match = self.gen.builder.build_int_compare(IntPredicate::EQ, actual_tag, self.gen.context.i32_type().const_int(*tag as u64, false), "match").unwrap();
+                            self.gen.builder.build_conditional_branch(is_match, body_bb, next_arm_bb).unwrap();
+                            
+                            if let Some(bname) = binding {
+                                self.gen.builder.position_at_end(body_bb);
+                                let p_ptr = self.gen.builder.build_struct_gep(*et, subj_val.into_pointer_value(), 1, "pptr").unwrap();
+                                let ed = self.gen.enum_decls.get(enum_name).unwrap();
+                                let v_ty = ed.variants[*tag as usize].typ.as_ref().unwrap();
+                                let b_ty = self.gen.type_to_basic_type(v_ty).unwrap();
+                                let p_cast = self.gen.builder.build_bit_cast(p_ptr, b_ty.ptr_type(AddressSpace::default()), "pcast").unwrap().into_pointer_value();
+                                let val = self.gen.builder.build_load(b_ty, p_cast, "pval").unwrap();
+                                
+                                let alloca = self.create_alloca(bname, v_ty);
+                                self.emit_retain(val, v_ty);
+                                self.gen.builder.build_store(alloca, val).unwrap();
+                                self.variables.insert(bname.clone(), (VarLoc::Stack(alloca), v_ty.clone()));
+                                // We don't push to scope_stack here, compile_block will do it? 
+                                // No, we need a special scope for the arm if there is a binding.
+                            }
+                        }
+                    }
+                    
+                    self.gen.builder.position_at_end(body_bb);
+                    self.compile_block(&arm.body)?;
+                    if self.gen.builder.get_insert_block().unwrap().get_terminator().is_none() {
+                        self.gen.builder.build_unconditional_branch(end_bb).unwrap();
+                    }
+                    self.gen.builder.position_at_end(next_arm_bb);
+                }
+                
+                if self.gen.builder.get_insert_block().unwrap().get_terminator().is_none() {
+                    self.gen.builder.build_unconditional_branch(end_bb).unwrap();
+                }
+                self.gen.builder.position_at_end(end_bb); Ok(())
+            }

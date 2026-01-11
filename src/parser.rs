@@ -51,6 +51,7 @@ fn precedence_of(kind: &TokenKind) -> Precedence {
     }
 }
 
+#[derive(Clone)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     current_token: Token,
@@ -171,6 +172,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -203,6 +206,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -271,6 +276,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -305,12 +312,12 @@ impl<'a> Parser<'a> {
         } else {
             return Err(self.cur_error("Expected string for path"));
         };
-        self.next_token(); // move past string
+        
         let mut alias = None;
-        if self.cur_is(&TokenKind::TokAs) {
-            self.next_token();
+        if self.peek_is(&TokenKind::TokAs) {
+            self.next_token(); // string -> as
+            self.next_token(); // as -> identifier
             alias = Some(self.expect_identifier_string()?);
-            self.next_token();
         }
         Ok(Item::Import { path, alias })
     }
@@ -324,6 +331,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -375,6 +384,8 @@ impl<'a> Parser<'a> {
         self.next_token(); // impl
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -384,6 +395,10 @@ impl<'a> Parser<'a> {
         self.next_token();
         if self.cur_is(&TokenKind::Less) {
             let _ = self.parse_type_arguments()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) {
+                 return Err(self.cur_error("Expected '>' after impl type args"));
+            }
             self.next_token(); // move past '>'
         }
         self.skip_newlines();
@@ -435,6 +450,8 @@ impl<'a> Parser<'a> {
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -576,11 +593,12 @@ impl<'a> Parser<'a> {
                 b
             } else {
                 let expr = self.parse_expression(Precedence::Lowest)?;
+                self.next_token();
                 Block { statements: vec![Statement::Expr(expr)] }
             };
             arms.push(WhenArm { pattern, body });
-            if self.peek_is(&TokenKind::Comma) {
-                self.next_token(); self.next_token();
+            if self.cur_is(&TokenKind::Comma) {
+                self.next_token();
             }
             self.skip_newlines();
         }
@@ -647,7 +665,9 @@ impl<'a> Parser<'a> {
         self.next_token();
         let t = self.parse_block()?;
         let mut e = None;
-        self.skip_newlines();
+        while self.peek_is(&TokenKind::Newline) {
+            self.next_token();
+        }
         if self.peek_is(&TokenKind::TokElse) {
             self.next_token(); self.next_token();
             if self.cur_is(&TokenKind::TokIf) {
@@ -732,12 +752,20 @@ impl<'a> Parser<'a> {
                     } else { return Err(self.cur_error("Expected identifier after dot")); }
                 }
                 if self.peek_is(&TokenKind::Less) {
-                    self.next_token();
-                    let args = self.parse_type_arguments()?;
-                    self.next_token();
-                    if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>' after generic type arguments")); }
-                    Ok(Type::Custom(n, args))
-                } else { Ok(Type::Custom(n, vec![])) }
+                    let mut checkpoint = self.clone();
+                    checkpoint.next_token(); // Move to '<'
+                    match checkpoint.parse_type_arguments() {
+                        Ok(args) => {
+                            checkpoint.next_token(); // Move to '>'
+                            if checkpoint.cur_is(&TokenKind::Greater) {
+                                *self = checkpoint;
+                                return Ok(Type::Custom(n, args));
+                            }
+                        }
+                        Err(_) => {}
+                    }
+                }
+                Ok(Type::Custom(n, vec![]))
             }
             _ => Err(self.cur_error("Expected type")),
         }
@@ -813,10 +841,7 @@ impl<'a> Parser<'a> {
                 if !self.cur_is(&TokenKind::RParen) { return Err(self.cur_error("Expected ')'")); }
                 Ok(Expression::Sizeof(typ))
             }
-            _ => {
-                eprintln!("DEBUG: No prefix for token: {:?}", self.current_token.kind);
-                Err(self.cur_error(&format!("No prefix for {:?}", self.current_token.kind)))
-            },
+            _ => Err(self.cur_error(&format!("No prefix for {:?}", self.current_token.kind))),
         }
     }
 
@@ -824,24 +849,43 @@ impl<'a> Parser<'a> {
         let n = self.expect_identifier_string()?;
         let mut expr = Expression::Identifier(n.clone());
         let mut current_path = n.clone();
+        
         if self.peek_is(&TokenKind::Less) {
-            self.next_token();
-            match self.parse_type_arguments() {
+            let mut checkpoint = self.clone();
+            checkpoint.next_token(); // Move to '<'
+            match checkpoint.parse_type_arguments() {
                 Ok(args) => {
-                    self.next_token();
-                    if self.cur_is(&TokenKind::Greater) {
+                    checkpoint.next_token(); // Move to '>'
+                    if checkpoint.cur_is(&TokenKind::Greater) {
+                        *self = checkpoint;
                         expr = Expression::GenericSpecialization { expression: Box::new(expr), type_args: args };
-                    } else { return Err(self.cur_error("Expected '>'")); }
+                    }
                 }
-                Err(e) => return Err(e),
+                Err(_) => {}
             }
         }
+
         loop {
             if self.peek_is(&TokenKind::Dot) {
                 self.next_token(); self.next_token();
                 let f = self.expect_identifier_string()?;
                 expr = Expression::MemberAccess { object: Box::new(expr), field: f.clone() };
                 current_path.push('.'); current_path.push_str(&f);
+                
+                if self.peek_is(&TokenKind::Less) {
+                    let mut checkpoint = self.clone();
+                    checkpoint.next_token(); // Move to '<'
+                    match checkpoint.parse_type_arguments() {
+                        Ok(args) => {
+                            checkpoint.next_token(); // Move to '>'
+                            if checkpoint.cur_is(&TokenKind::Greater) {
+                                *self = checkpoint;
+                                expr = Expression::GenericSpecialization { expression: Box::new(expr), type_args: args };
+                            }
+                        }
+                        Err(_) => {}
+                    }
+                }
                 continue;
             }
             if self.peek_is(&TokenKind::ColonColon) {
@@ -868,12 +912,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_struct_init(&mut self, expr: Expression) -> Result<Expression, CompileError> {
-        let name = match expr {
-            Expression::Identifier(n) => n,
-            Expression::MemberAccess { .. } => self.expr_to_string(&expr)?,
+        let (name, t_args) = match expr {
+            Expression::Identifier(n) => (n, vec![]),
+            Expression::MemberAccess { .. } => (self.expr_to_string(&expr)?, vec![]),
+            Expression::GenericSpecialization { expression, type_args } => {
+                 let n = match *expression {
+                     Expression::Identifier(n) => n,
+                     Expression::MemberAccess { .. } => self.expr_to_string(&expression)?,
+                     _ => return Err(self.cur_error("Invalid generic struct init")),
+                 };
+                 (n, type_args)
+            },
             _ => return Err(self.cur_error("Invalid struct init")),
         };
         self.next_token();
+        self.next_token(); // Move past '{'
         let mut fields = Vec::new();
         while !self.cur_is(&TokenKind::RBrace) {
             self.skip_newlines();
@@ -888,7 +941,7 @@ impl<'a> Parser<'a> {
             if self.cur_is(&TokenKind::Comma) { self.next_token(); }
             self.skip_newlines();
         }
-        Ok(Expression::StructInit { name, fields, type_args: vec![] })
+        Ok(Expression::StructInit { name, fields, type_args: t_args })
     }
 
     fn expr_to_string(&self, expr: &Expression) -> Result<String, CompileError> {

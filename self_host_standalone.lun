@@ -1,0 +1,146 @@
+// --------------------------------------------------
+// STANDALONE LUNITE LEXER (Static method test)
+// --------------------------------------------------
+
+extern fn print(s: string) -> void
+extern fn lunite_print_int(i: int) -> void
+extern fn lunite_str_len_runtime(s: string) -> int
+extern fn lunite_str_at(s: string, idx: int) -> int
+extern fn lunite_str_substring(s: string, start: int, end: int) -> string
+
+fn TokenKind_EOF() -> int { return 1; }
+fn TokenKind_Identifier() -> int { return 2; }
+fn TokenKind_IntLiteral() -> int { return 3; }
+fn TokenKind_Plus() -> int { return 6; }
+fn TokenKind_LParen() -> int { return 14; }
+fn TokenKind_RParen() -> int { return 15; }
+fn TokenKind_LBrace() -> int { return 16; }
+fn TokenKind_RBrace() -> int { return 17; }
+fn TokenKind_Semicolon() -> int { return 18; }
+fn TokenKind_Fn() -> int { return 24; }
+fn TokenKind_Let() -> int { return 25; }
+
+struct Lexer {
+    pub input: string,
+    pub pos: int,
+    pub read_pos: int,
+    pub ch: int,
+    pub cur_token_val_str: string, 
+    pub cur_token_val_int: int     
+}
+
+impl Lexer {
+    pub fn new(input: string) -> Lexer {
+        let l = Lexer {
+            input: input,
+            pos: 0,
+            read_pos: 0,
+            ch: 0,
+            cur_token_val_str: "",
+            cur_token_val_int: 0
+        };
+        l.read_char();
+        return l;
+    }
+
+    pub fn read_char(self: Lexer) {
+        let input_len = lunite_str_len_runtime(self.input);
+        if (self.read_pos >= input_len) {
+            self.ch = 0;
+        } else {
+            self.ch = lunite_str_at(self.input, self.read_pos);
+        }
+        self.pos = self.read_pos;
+        self.read_pos = self.read_pos + 1;
+    }
+
+    pub fn skip_whitespace(self: Lexer) {
+        while ((self.ch == 32) | (self.ch == 9) | (self.ch == 13) | (self.ch == 10)) {
+            self.read_char();
+        }
+    }
+
+    pub fn next_token(self: Lexer) -> int {
+        self.skip_whitespace();
+        if (self.ch == 0) { return TokenKind_EOF(); }
+        
+        let c = self.ch;
+        self.read_char();
+
+        if (c == 40) { return TokenKind_LParen(); }
+        if (c == 41) { return TokenKind_RParen(); }
+        if (c == 123) { return TokenKind_LBrace(); }
+        if (c == 125) { return TokenKind_RBrace(); }
+        if (c == 59) { return TokenKind_Semicolon(); }
+        if (c == 43) { return TokenKind_Plus(); }
+        
+        if ((c >= 97 && c <= 122) | (c >= 65 && c <= 90)) {
+            let start = self.pos - 1;
+            while ((self.ch >= 97 && self.ch <= 122) | (self.ch >= 65 && self.ch <= 90) | (self.ch == 95) | (self.ch >= 48 && self.ch <= 57)) {
+                self.read_char();
+            }
+            let ident = lunite_str_substring(self.input, start, self.pos);
+            self.cur_token_val_str = ident;
+            if (ident == "fn") { return TokenKind_Fn(); }
+            if (ident == "let") { return TokenKind_Let(); }
+            return TokenKind_Identifier();
+        }
+        
+        if (c >= 48 && c <= 57) {
+            let start = self.pos - 1;
+            while (self.ch >= 48 && self.ch <= 57) {
+                self.read_char();
+            }
+            let num_str = lunite_str_substring(self.input, start, self.pos);
+            let res = 0;
+            let i = 0;
+            let len = lunite_str_len_runtime(num_str);
+            while (len > i) {
+                res = res * 10 + (lunite_str_at(num_str, i) - 48);
+                i = i + 1;
+            }
+            self.cur_token_val_int = res;
+            return TokenKind_IntLiteral();
+        }
+        
+        return 0; // Illegal
+    }
+}
+
+fn main() {
+    print("--- STANDALONE LEXER TEST ---");
+    let source = "fn main() { let x = 42; }";
+    print("Source: ");
+    print(source);
+    
+    // Testing Lexer.new static call
+    let l = Lexer.new(source);
+    let count = 0;
+    let running = true;
+    
+    let EOF_K = TokenKind_EOF();
+    let FN_K = TokenKind_Fn();
+    let LET_K = TokenKind_Let();
+    let IDENT_K = TokenKind_Identifier();
+    let INT_K = TokenKind_IntLiteral();
+
+    while (running) {
+        let kind = l.next_token();
+        count = count + 1;
+        
+        if (kind == EOF_K) {
+            print("[Token] EOF");
+            running = false;
+        } else {
+            if (kind == FN_K) { print("[Token] Keyword: fn"); }
+            else { if (kind == LET_K) { print("[Token] Keyword: let"); }
+            else { if (kind == IDENT_K) { print("[Token] Identifier: "); print(l.cur_token_val_str); }
+            else { if (kind == INT_K) { print("[Token] Int: "); lunite_print_int(l.cur_token_val_int); }
+            else { print("[Token] Other symbol"); }}}}
+        }
+        
+        if (count > 20) { running = false; }
+    }
+    print("Tokens found: ");
+    lunite_print_int(count);
+}

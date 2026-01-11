@@ -1,0 +1,49 @@
+import "std/lexer.lun" as lex
+import "std/token.lun" as tok
+import "std/io.lun" as io
+
+fn main() {
+    print("DEBUG: Entered main");
+    let source = "fn main() { let x = 42; print(x); }";
+    print("Tokenizing source:");
+    print(source);
+    
+    let l = lex.Lexer.new(source);
+    let count = 0;
+    let running = true;
+    
+    while (running) {
+        let t = l.next_token();
+        count = count + 1;
+        
+        when (t.kind) {
+            tok.TokenKind::EOF => {
+                print("Found EOF");
+                running = false;
+            },
+            tok.TokenKind::TokFn => {
+                print("Found Keyword: fn");
+            },
+            tok.TokenKind::TokLet => {
+                print("Found Keyword: let");
+            },
+            tok.TokenKind::Identifier(name) => {
+                print("Found Identifier:");
+                print(name);
+            },
+            tok.TokenKind::IntLiteral(val) => {
+                print("Found Int Literal:");
+                lunite_print_int(val);
+            },
+            else => {
+                // print("Found other token");
+            }
+        }
+        
+        if (count > 100) { running = false; }
+    }
+    
+    print("Total tokens found:");
+    lunite_print_int(count);
+    print("SUCCESS: Lexer tokenization is alive!");
+}

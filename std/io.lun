@@ -1,5 +1,48 @@
-extern fn lunite_io_read_file(path: string) -> string
+import "string.lun" as str
 
-pub fn read_file(path: string) -> string {
+extern fn lunite_io_read_file(path: string) -> Result<string, string>
+extern fn lunite_io_write_file(path: string, content: string) -> int
+
+pub fn read_file(path: string) -> Result<string, string> {
     return lunite_io_read_file(path);
+}
+
+pub fn write_file(path: string, content: string) -> bool {
+    let res = lunite_io_write_file(path, content);
+    return res == 0;
+}
+
+pub enum Level {
+    ERROR,
+    WARN,
+    INFO,
+    DEBUG,
+    TRACE
+}
+
+fn level_to_int(l: Level) -> int {
+    when (l) {
+        Level::ERROR => { return 0; },
+        Level::WARN => { return 1; },
+        Level::INFO => { return 2; },
+        Level::DEBUG => { return 3; },
+        Level::TRACE => { return 4; },
+        else => { return 5; }
+    }
+}
+
+pub fn log(level: Level, msg: string) {
+
+    let current_level = 3; // DEBUG hardcoded
+
+    let l_int = level_to_int(level);
+
+    
+
+    if (l_int <= current_level) {
+
+        str.print(msg);
+
+    }
+
 }

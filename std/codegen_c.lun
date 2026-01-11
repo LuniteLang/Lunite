@@ -1,0 +1,75 @@
+import "ast.lun" as ast
+import "list.lun" as list
+import "string.lun" as str
+
+pub struct CodegenC {
+    pub output: string
+}
+
+impl CodegenC {
+    pub fn new() -> CodegenC {
+        return CodegenC { output: "" };
+    }
+
+    pub fn generate(self: CodegenC, prog: ast.Program) -> string {
+        self.output = "#include <stdio.h>\n#include <stdint.h>\n\n";
+        
+        let items = prog.items;
+        let i = 0;
+        while (items.len() > i) {
+            let item = items.get(i);
+            when (item) {
+                ast.Item::Function(f) => {
+                    self.gen_function(f);
+                },
+                else => {}
+            }
+            i = i + 1;
+        }
+        return self.output;
+    }
+
+    pub fn gen_function(self: CodegenC, f: ast.FunctionDecl) {
+        self.output = self.output + "void " + f.name + "() {\n";
+        let body = f.body;
+        let i = 0;
+        while (body.len() > i) {
+            let stmt = body.get(i);
+            when (stmt) {
+                ast.Statement::Expr(e) => {
+                    self.output = self.output + "    ";
+                    self.gen_expr(e);
+                    self.output = self.output + ";\n";
+                },
+                else => {}
+            }
+            i = i + 1;
+        }
+        self.output = self.output + "}\n\n";
+    }
+
+    pub fn gen_expr(self: CodegenC, e: ast.Expression) {
+        when (e.kind) {
+            ast.ExpressionKind::IntLiteral(v) => {
+                // Simplified: assuming I can concat int to string if I had a helper.
+                // Since I don't have int_to_str yet, I'll just use a placeholder or skip.
+                self.output = self.output + "/* int literal */";
+            },
+            ast.ExpressionKind::StringLiteral(s) => {
+                self.output = self.output + "\"" + s + "\"";
+            },
+            ast.ExpressionKind::Identifier(n) => {
+                self.output = self.output + n;
+            },
+            ast.ExpressionKind::Call(c) => {
+                self.gen_expr(c.func);
+                self.output = self.output + "(";
+                // arguments...
+                self.output = self.output + ")";
+            }
+            else => {
+                self.output = self.output + "/* unknown expr */";
+            }
+        }
+    }
+}

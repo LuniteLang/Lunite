@@ -41,8 +41,11 @@ pub struct TModule {
     pub name: String,
     pub items: Vec<TItem>,
     pub exports: HashMap<String, Symbol>,
+    pub imports: HashMap<String, String>,
     pub struct_decls: HashMap<String, StructDecl>,
     pub enum_decls: HashMap<String, EnumDecl>,
+    pub generic_structs: HashMap<String, (StructDecl, String)>,
+    pub generic_impls: HashMap<String, (ImplDecl, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -235,16 +238,31 @@ impl SemanticAnalyzer {
     }
 
     fn instantiate_struct(&mut self, base_name: &str, type_args: &[Type]) -> Result<String, CompileError> {
-        eprintln!("[SEM] Instantiate Struct: {} with {:?}", base_name, type_args);
         let (origin_decl, origin_mod) = if let Some((decl, mod_name)) = self.generic_structs.get(base_name) { (decl.clone(), mod_name.clone()) }
         else {
              let found = self.generic_structs.iter().find(|(k, _)| base_name.ends_with(*k));
-             if let Some((_, val)) = found { val.clone() } else { return Err(self.cur_error(&format!("Generic struct '{}' not found", base_name))); }
+             if let Some((_, val)) = found { val.clone() } else { 
+                 // Try lookup in other modules
+                 let mut found_external = None;
+                 for module in self.analyzed_modules.values() {
+                     if let Some(val) = module.generic_structs.get(base_name) {
+                         found_external = Some(val.clone());
+                         break;
+                     }
+                     if let Some((_, val)) = module.generic_structs.iter().find(|(k, _)| base_name.ends_with(*k)) {
+                         found_external = Some(val.clone());
+                         break;
+                     }
+                 }
+                 if let Some(val) = found_external { val } else {
+                    return Err(self.cur_error(&format!("Generic struct '{}' not found", base_name))); 
+                 }
+             }
         };
         
         let full_base_name = if base_name.contains(&origin_mod) { base_name.to_string() } else { format!("{}_{}", origin_mod, origin_decl.name) };
         let mangled_name = self.mangle_name(&full_base_name, type_args);
-        eprintln!("[SEM] Generated Mangled Name: {}", mangled_name);
+        // eprintln!("[SEM] Generated Mangled Name: {}", mangled_name);
         
         if self.monomorphized_structs.contains(&mangled_name) { return Ok(mangled_name); }
         if origin_decl.generic_params.len() != type_args.len() { return Err(self.cur_error("Generic args mismatch")); }
@@ -308,13 +326,30 @@ impl SemanticAnalyzer {
     fn process_instantiation_queue(&mut self) -> Result<(), CompileError> {
         while let Some((mod_name, decl, mapping)) = self.instantiation_queue.pop() {
             let old_mod = self.current_module_name.clone();
-            self.current_module_name = mod_name.clone(); 
+            let old_imports = self.current_imports.clone();
+            
+            self.current_module_name = mod_name.clone();
+            if let Some(m) = self.analyzed_modules.get(&mod_name) {
+                self.current_imports = m.imports.clone();
+            } else if mod_name != old_mod {
+                 // Should not happen if dependencies are analyzed first
+                 // But for current module (self recursion), imports are already set.
+                 // If switching to a module that is analyzed but not current, we need its imports.
+                 // If switching to current module, do nothing (keep current imports).
+                 // Wait, analyzed_modules contains finished modules. Current module is NOT in analyzed_modules yet.
+                 // So if mod_name == current_module_name (before switch), we keep imports.
+                 // If mod_name != current_module_name, it must be in analyzed_modules.
+            }
+
             let mut substituted_body = decl.body.clone();
             self.substitute_block(&mut substituted_body, &mapping)?;
             let mut concrete_decl = decl.clone();
             concrete_decl.body = substituted_body;
             let t_func = self.analyze_function(concrete_decl)?;
+            
             self.current_module_name = old_mod; 
+            self.current_imports = old_imports;
+            
             self.pending_items.push(TItem::Function(t_func.clone()));
             let pts: Vec<Type> = t_func.params.iter().map(|(_,t,_)| t.clone()).collect();
             self.functions.insert(t_func.name.clone(), (pts, t_func.return_type, t_func.visibility, t_func.is_pure, self.current_module_name.clone()));
@@ -384,8 +419,13 @@ impl SemanticAnalyzer {
                 } else {
                     let suffix = self.mangle_name("", &args);
                     
-                    let (origin_mod, origin_struct_name) = if let Some(pos) = name.find('.') { 
-                        (self.current_imports.get(&name[..pos]).cloned().unwrap(), name[pos+1..].to_string()) 
+                    let (origin_mod, origin_struct_name) = if let Some(pos) = name.find('.') {
+                        let alias = &name[..pos];
+                        if self.current_imports.get(alias).is_none() {
+                            eprintln!("[SEM] PANIC AHEAD: Alias '{}' not found in imports for type '{}'", alias, name);
+                            eprintln!("[SEM] Current Imports: {:?}", self.current_imports);
+                        }
+                        (self.current_imports.get(alias).cloned().unwrap(), name[pos+1..].to_string()) 
                     } else if let Some(real_mod) = self.current_imports.get(&name) {
                         (real_mod.clone(), name.clone())
                     } else if let Some((_, mod_name)) = self.generic_structs.get(&name) {
@@ -402,26 +442,51 @@ impl SemanticAnalyzer {
                     };
 
                     let concrete_name = format!("{}_{}", mangled_base, suffix);
-                    eprintln!("[SEM] MangleType Custom: Name='{}', Base='{}', Concrete='{}', Context='{}'", name, mangled_base, concrete_name, self.current_module_name);
                     
                     if self.structs.contains_key(&concrete_name) { return Type::Custom(concrete_name, vec![]); }
                     
-                    if let Some((generic_decl, _)) = self.generic_structs.get(&origin_struct_name).cloned().or_else(|| self.generic_structs.get(&name).cloned()) {
-                         let mut mapping = HashMap::new();
+                    let generic_lookup = self.generic_structs.get(&origin_struct_name).cloned().or_else(|| self.generic_structs.get(&name).cloned());
+                    let (generic_decl, origin_mod_found) = if let Some(val) = generic_lookup { val } else {
+                        // Lookup external
+                        let mut found = None;
+                        for module in self.analyzed_modules.values() {
+                            if let Some(val) = module.generic_structs.get(&origin_struct_name).cloned().or_else(|| module.generic_structs.get(&name).cloned()) {
+                                found = Some(val); break;
+                            }
+                        }
+                        if let Some(val) = found { val } else {
+                            // If still not found, return as is (maybe not generic or not found)
+                            return Type::Custom(concrete_name, args.to_vec()); // Or panic?
+                        }
+                    };
+                    
+                    let mangled_base_found = format!("{}_{}", origin_mod_found, generic_decl.name);
+                    let concrete_name = format!("{}_{}", mangled_base_found, suffix);
+
+                    let mut mapping = HashMap::new();
                          for (i, param) in generic_decl.generic_params.iter().enumerate() { if i < args.len() { mapping.insert(param.clone(), self.mangle_type(args[i].clone())); } }
                          let mut new_decl = generic_decl.clone();
                          new_decl.name = concrete_name.clone();
                          new_decl.generic_params.clear();
                          for field in &mut new_decl.fields { field.1 = self.substitute_type(&field.1, &mapping); field.1 = self.mangle_type(field.1.clone()); }
                          self.structs.insert(concrete_name.clone(), (new_decl.clone(), origin_mod.clone()));
-                         if let Some((impl_decl, _)) = self.generic_impls.get(&origin_struct_name).cloned() {
+                         
+                         let impl_lookup = self.generic_impls.get(&generic_decl.name).cloned().or_else(|| {
+                             let mut found = None;
+                             for module in self.analyzed_modules.values() {
+                                 if let Some(val) = module.generic_impls.get(&generic_decl.name).cloned() {
+                                     found = Some(val); break;
+                                 }
+                             }
+                             found
+                         });
+
+                         if let Some((impl_decl, _)) = impl_lookup {
                              for method in &impl_decl.methods {
                                  let _ = self.instantiate_function_from_decl(method.clone(), &mapping, &concrete_name, &origin_mod);
                              }
                          }
                          return Type::Custom(concrete_name, vec![]);
-                    }
-                    Type::Custom(name, args)
                 }
             }
             Type::Array(inner, size) => Type::Array(Box::new(self.mangle_type(*inner)), size),
@@ -430,21 +495,22 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn mangle_type_in_discovery(&self, typ: Type, mod_name: &str) -> Type {
+    fn mangle_type_in_discovery(&self, typ: Type, mod_name: &str, skip_names: &HashSet<String>) -> Type {
         match typ {
             Type::Custom(name, args) => {
-                if name.contains('_') { return Type::Custom(name, args); }
+                let mangled_args: Vec<Type> = args.iter().map(|t| self.mangle_type_in_discovery(t.clone(), mod_name, skip_names)).collect();
+                if name.contains('_') || skip_names.contains(&name) { return Type::Custom(name, mangled_args); }
                 let (final_mod, final_name) = if let Some(pos) = name.find('.') {
                     let alias = &name[..pos];
                     let real_mod = self.current_imports.get(alias).cloned().unwrap_or(alias.to_string());
                     (real_mod, name[pos+1..].to_string())
                 } else { (mod_name.to_string(), name) };
                 let mangled = format!("{}_{}", final_mod, final_name);
-                if self.enum_names.contains(&mangled) { return Type::Enum(mangled, args); }
-                Type::Custom(mangled, args)
+                if self.enum_names.contains(&mangled) { return Type::Enum(mangled, mangled_args); }
+                Type::Custom(mangled, mangled_args)
             }
-            Type::Array(inner, size) => Type::Array(Box::new(self.mangle_type_in_discovery(*inner, mod_name)), size),
-            Type::Pointer(inner) => Type::Pointer(Box::new(self.mangle_type_in_discovery(*inner, mod_name))),
+            Type::Array(inner, size) => Type::Array(Box::new(self.mangle_type_in_discovery(*inner, mod_name, skip_names)), size),
+            Type::Pointer(inner) => Type::Pointer(Box::new(self.mangle_type_in_discovery(*inner, mod_name, skip_names))),
             _ => typ
         }
     }
@@ -523,23 +589,36 @@ impl SemanticAnalyzer {
             match item {
                 Item::Enum(e) => {
                     let mangled = format!("{}_{}", mod_name, e.name);
+                    let mut me = e.clone();
+                    for v in &mut me.variants {
+                        if let Some(t) = &mut v.typ {
+                            *t = self.mangle_type_in_discovery(t.clone(), &mod_name, &HashSet::new());
+                        }
+                    }
                     self.enum_names.insert(mangled.clone());
-                    self.enum_decls_global.insert(mangled.clone(), e.clone());
+                    self.enum_decls_global.insert(mangled.clone(), me.clone());
                     if e.visibility == Visibility::Public { exports.insert(e.name.clone(), Symbol { name: mangled.clone(), typ: Type::Enum(mangled, vec![]), is_mutable: false, visibility: Visibility::Public }); }
                 }
                 Item::Struct(s) => {
                     let mangled = format!("{}_{}", mod_name, s.name);
                     let mut ms = s.clone(); ms.name = mangled.clone();
-                    for field in &mut ms.fields { field.1 = self.mangle_type_in_discovery(field.1.clone(), &mod_name); }
-                    self.structs.insert(mangled.clone(), (ms, mod_name.clone()));
-                    if !s.generic_params.is_empty() { self.generic_structs.insert(s.name.clone(), (s.clone(), mod_name.clone())); }
+                    let skip: HashSet<String> = s.generic_params.iter().cloned().collect();
+                    for field in &mut ms.fields { field.1 = self.mangle_type_in_discovery(field.1.clone(), &mod_name, &skip); }
+                    self.structs.insert(mangled.clone(), (ms.clone(), mod_name.clone()));
+                    if !s.generic_params.is_empty() { 
+                        let mut gs = ms.clone();
+                        gs.name = s.name.clone();
+                        self.generic_structs.insert(s.name.clone(), (gs.clone(), mod_name.clone())); 
+                        self.generic_structs.insert(mangled.clone(), (gs, mod_name.clone()));
+                    }
                     if s.visibility == Visibility::Public { exports.insert(s.name.clone(), Symbol { name: mangled.clone(), typ: Type::Custom(mangled, vec![]), is_mutable: false, visibility: Visibility::Public }); }
                 }
                 Item::Function(f) => {
                     let prefix = format!("{}_", mod_name);
                     let mangled = if f.name == "main" { "main".to_string() } else if f.name.starts_with(&prefix) { f.name.clone() } else { format!("{}{}", prefix, f.name) };
-                    let pts: Vec<Type> = f.params.iter().map(|(_, t, _)| self.mangle_type_in_discovery(t.clone(), &mod_name)).collect();
-                    let ret = self.mangle_type_in_discovery(f.return_type.clone(), &mod_name);
+                    let skip: HashSet<String> = f.generic_params.iter().cloned().collect();
+                    let pts: Vec<Type> = f.params.iter().map(|(_, t, _)| self.mangle_type_in_discovery(t.clone(), &mod_name, &skip)).collect();
+                    let ret = self.mangle_type_in_discovery(f.return_type.clone(), &mod_name, &skip);
                     self.functions.insert(mangled.clone(), (pts.clone(), ret.clone(), f.visibility.clone(), f.is_pure, mod_name.clone()));
                     if !f.generic_params.is_empty() { self.generic_functions.insert(f.name.clone(), (f.clone(), mod_name.clone())); }
                     if f.visibility == Visibility::Public { exports.insert(f.name.clone(), Symbol { name: mangled, typ: Type::Function(pts, Box::new(ret)), is_mutable: false, visibility: Visibility::Public }); }
@@ -557,8 +636,10 @@ impl SemanticAnalyzer {
                     if !i.generic_params.is_empty() { self.generic_impls.insert(i.struct_name.clone(), (i.clone(), mod_name.clone())); }
                     for m in &i.methods {
                         let mangled = format!("{}_{}_{}", mod_name, i.struct_name, m.name);
-                        let pts: Vec<Type> = m.params.iter().map(|(_, t, _)| self.mangle_type_in_discovery(t.clone(), &mod_name)).collect();
-                        let ret = self.mangle_type_in_discovery(m.return_type.clone(), &mod_name);
+                        let mut skip: HashSet<String> = m.generic_params.iter().cloned().collect();
+                        skip.extend(i.generic_params.iter().cloned());
+                        let pts: Vec<Type> = m.params.iter().map(|(_, t, _)| self.mangle_type_in_discovery(t.clone(), &mod_name, &skip)).collect();
+                        let ret = self.mangle_type_in_discovery(m.return_type.clone(), &mod_name, &skip);
                         self.functions.insert(mangled.clone(), (pts.clone(), ret.clone(), m.visibility.clone(), m.is_pure, mod_name.clone()));
                     }
                 }
@@ -574,13 +655,15 @@ impl SemanticAnalyzer {
                 Item::NativeFunction(f) => { t_items.push(TItem::NativeFunction(TNativeFunctionDecl { name: f.name, params: f.params, return_type: f.return_type, visibility: f.visibility })); }
                 Item::Struct(s) => {
                     let mut ms = s.clone(); ms.name = format!("{}_{}", mod_name, s.name);
-                    for field in &mut ms.fields { field.1 = self.mangle_type_in_discovery(field.1.clone(), &mod_name); }
+                    let skip: HashSet<String> = s.generic_params.iter().cloned().collect();
+                    for field in &mut ms.fields { field.1 = self.mangle_type_in_discovery(field.1.clone(), &mod_name, &skip); }
                     self.structs.insert(ms.name.clone(), (ms.clone(), mod_name.clone()));
                     t_items.push(TItem::Struct(ms));
                 }
                 Item::Enum(e) => {
                     let mut me = e.clone(); me.name = format!("{}_{}", mod_name, e.name);
-                    for variant in &mut me.variants { if let Some(vt) = &variant.typ { variant.typ = Some(self.mangle_type_in_discovery(vt.clone(), &mod_name)); } }
+                    let skip: HashSet<String> = e.generic_params.iter().cloned().collect();
+                    for variant in &mut me.variants { if let Some(vt) = &variant.typ { variant.typ = Some(self.mangle_type_in_discovery(vt.clone(), &mod_name, &skip)); } }
                     t_items.push(TItem::Enum(me));
                 }
                 _ => {}
@@ -599,7 +682,16 @@ impl SemanticAnalyzer {
                 _ => {}
             }
         }
-        self.analyzed_modules.insert(mod_name.clone(), TModule { name: mod_name.clone(), items: t_items, exports, struct_decls: final_structs, enum_decls: final_enums });
+        self.analyzed_modules.insert(mod_name.clone(), TModule { 
+            name: mod_name.clone(), 
+            items: t_items, 
+            exports, 
+            imports: self.current_imports.clone(),
+            struct_decls: final_structs, 
+            enum_decls: final_enums,
+            generic_structs: self.generic_structs.clone(),
+            generic_impls: self.generic_impls.clone()
+        });
         
         self.processing_stack.remove(&abs_path);
         self.current_module_name = old_mod_name; self.current_module_path = old_mod_path; self.current_imports = old_imports; self.current_scope = old_scope; self.pending_items = old_pending_items;
@@ -607,6 +699,24 @@ impl SemanticAnalyzer {
     }
 
     fn resolve_qualified_identifier(&self, name: &str) -> Result<Symbol, CompileError> {
+        if name == "print" { return Ok(Symbol { name: "print".into(), typ: Type::Function(vec![Type::String], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_print_int" { return Ok(Symbol { name: "lunite_print_int".into(), typ: Type::Function(vec![Type::Int], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_print_float" { return Ok(Symbol { name: "lunite_print_float".into(), typ: Type::Function(vec![Type::Float], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_alloc" { return Ok(Symbol { name: "lunite_alloc".into(), typ: Type::Function(vec![Type::Int, Type::Pointer(Box::new(Type::Void)), Type::Pointer(Box::new(Type::Void))], Box::new(Type::Pointer(Box::new(Type::Void)))), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_str_concat" { return Ok(Symbol { name: "lunite_str_concat".into(), typ: Type::Function(vec![Type::String, Type::String], Box::new(Type::String)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_str_at" { return Ok(Symbol { name: "lunite_str_at".into(), typ: Type::Function(vec![Type::String, Type::Int], Box::new(Type::Int)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_str_len_runtime" { return Ok(Symbol { name: "lunite_str_len_runtime".into(), typ: Type::Function(vec![Type::String], Box::new(Type::Int)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_str_substring" { return Ok(Symbol { name: "lunite_str_substring".into(), typ: Type::Function(vec![Type::String, Type::Int, Type::Int], Box::new(Type::String)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_io_read_file" { return Ok(Symbol { name: "lunite_io_read_file".into(), typ: Type::Function(vec![Type::String], Box::new(Type::Result(Box::new(Type::String), Box::new(Type::String)))), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_realloc" { return Ok(Symbol { name: "lunite_realloc".into(), typ: Type::Function(vec![Type::Pointer(Box::new(Type::Void)), Type::Int, Type::Int], Box::new(Type::Pointer(Box::new(Type::Void)))), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_array_copy" { return Ok(Symbol { name: "lunite_array_copy".into(), typ: Type::Function(vec![Type::Pointer(Box::new(Type::Void)), Type::Pointer(Box::new(Type::Void)), Type::Int, Type::Int], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_sys_system" { return Ok(Symbol { name: "lunite_sys_system".into(), typ: Type::Function(vec![Type::String], Box::new(Type::Int)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_sys_exit" { return Ok(Symbol { name: "lunite_sys_exit".into(), typ: Type::Function(vec![Type::Int], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_time_now" { return Ok(Symbol { name: "lunite_time_now".into(), typ: Type::Function(vec![], Box::new(Type::Int)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_time_sleep" { return Ok(Symbol { name: "lunite_time_sleep".into(), typ: Type::Function(vec![Type::Int], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_srand" { return Ok(Symbol { name: "lunite_srand".into(), typ: Type::Function(vec![Type::Int], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
+        if name == "lunite_rand_int" { return Ok(Symbol { name: "lunite_rand_int".into(), typ: Type::Function(vec![], Box::new(Type::Int)), is_mutable: false, visibility: Visibility::Public }); }
+
         if let Some(pos) = name.find('.') {
             let alias = &name[..pos]; let member = &name[pos+1..];
             if let Some(real_mod) = self.current_imports.get(alias) {
@@ -643,8 +753,21 @@ impl SemanticAnalyzer {
             if let Some(target_mod) = self.analyzed_modules.get(real_mod) { if let Some(sym) = target_mod.exports.get(name) { return Ok(sym.clone()); } }
         }
         
-        if name == "print" { return Ok(Symbol { name: "print".into(), typ: Type::Function(vec![Type::String], Box::new(Type::Void)), is_mutable: false, visibility: Visibility::Public }); }
-        if name.starts_with("lunite_") { return Ok(Symbol { name: name.into(), typ: Type::Void, is_mutable: false, visibility: Visibility::Public }); }
+        // Check for Structs and Enums
+        let mangled_type = format!("{}_{}", self.current_module_name, name);
+        if self.structs.contains_key(&mangled_type) {
+            return Ok(Symbol { name: mangled_type.clone(), typ: Type::Custom(mangled_type, vec![]), is_mutable: false, visibility: Visibility::Public });
+        }
+        if self.enum_names.contains(&mangled_type) {
+            return Ok(Symbol { name: mangled_type.clone(), typ: Type::Enum(mangled_type, vec![]), is_mutable: false, visibility: Visibility::Public });
+        }
+        if self.structs.contains_key(name) {
+            return Ok(Symbol { name: name.to_string(), typ: Type::Custom(name.to_string(), vec![]), is_mutable: false, visibility: Visibility::Public });
+        }
+        if self.enum_names.contains(name) {
+            return Ok(Symbol { name: name.to_string(), typ: Type::Enum(name.to_string(), vec![]), is_mutable: false, visibility: Visibility::Public });
+        }
+
         Err(self.cur_error(&format!("Undefined variable '{}'", name)))
     }
 
@@ -661,7 +784,7 @@ impl SemanticAnalyzer {
         let mangled = if f.name == "main" { "main".into() } 
                           else if f.name.starts_with(&prefix) { f.name.clone() } 
                           else { format!("{}{}", prefix, f.name) };
-        eprintln!("[SEM] Analyze Func: {} -> {}", f.name, mangled);
+        // eprintln!("[SEM] Analyze Func: {} -> {}", f.name, mangled);
         let mut typed_params = Vec::new();
         for (name, typ, is_mut) in f.params {
             let mt = self.mangle_type(typ);
@@ -764,6 +887,7 @@ impl SemanticAnalyzer {
                 }
             }
             Expression::Call { function, args, type_args } => {
+                self.process_instantiation_queue()?;
                 if let Expression::MemberAccess { object, field } = *function.clone() {
                     let (inner_obj, extracted_targs) = if let Expression::GenericSpecialization { expression, type_args } = *object.clone() { (*expression, type_args) } else { (*object.clone(), vec![]) };
                     
@@ -869,8 +993,16 @@ impl SemanticAnalyzer {
                 let tobj = self.analyze_expression(*object)?;
                 match &tobj.typ {
                     Type::String if field == "len" => Ok(TExpression { kind: TExpressionKind::MemberAccess { object: Box::new(tobj), field }, typ: Type::Int }),
-                    Type::Custom(sn, _) => { if let Some((s, _)) = self.structs.get(sn) { if let Some(f) = s.fields.iter().find(|(n,_,_)| n == &field) { return Ok(TExpression { kind: TExpressionKind::MemberAccess { object: Box::new(tobj), field }, typ: f.1.clone() }); } } Err(self.cur_error("Field not found")) }
-                    _ => Err(self.cur_error("Invalid member access"))
+                    Type::Custom(sn, _) => { 
+                        if let Some((s, _)) = self.structs.get(sn) { 
+                            if let Some(f) = s.fields.iter().find(|(n,_,_)| n == &field) { return Ok(TExpression { kind: TExpressionKind::MemberAccess { object: Box::new(tobj), field }, typ: f.1.clone() }); } 
+                        }
+                        Err(self.cur_error("Field not found")) 
+                    }
+                    _ => {
+                        eprintln!("[SEM] Invalid member access on type: {:?}, field: '{}'", tobj.typ, field);
+                        Err(self.cur_error("Invalid member access"))
+                    }
                 }
             }
             Expression::StructInit { name, fields, type_args } => {

@@ -1,0 +1,26 @@
+enum Token {
+    Ident(string),
+    Int(int),
+    None
+}
+
+fn test(t: Token) {
+    when (t) {
+        Token::Ident(name) => {
+            print("Found Ident:");
+            print(name);
+        },
+        Token::Int(val) => {
+            print("Found Int:");
+            lunite_print_int(val);
+        },
+        else => {
+            print("Found nothing");
+        }
+    }
+}
+
+fn main() {
+    test(Token::Ident("hacker"));
+    test(Token::Int(1337));
+}

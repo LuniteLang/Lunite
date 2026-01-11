@@ -6,13 +6,13 @@ pub struct MapEntry<K, V> {
 }
 
 pub struct Map<K, V> {
-    pub entries: list.List<MapEntry<K, V>>
+    pub entries: list.List<MapEntry<K, V> >
 }
 
 impl<K, V> Map<K, V> {
     pub fn new() -> Map<K, V> {
         return Map<K, V> {
-            entries: list.List<MapEntry<K, V>>.new()
+            entries: list.List<MapEntry<K, V> >.new()
         };
     }
 

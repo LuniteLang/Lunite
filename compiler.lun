@@ -1,0 +1,5 @@
+import "std/io.lun" as io
+
+fn main() {
+    print("Hello");
+}

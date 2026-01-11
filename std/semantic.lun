@@ -1,0 +1,40 @@
+import "ast.lun" as ast
+import "map.lun" as map
+import "list.lun" as list
+
+pub struct Symbol {
+    pub name: string,
+    pub kind: string // "function", "struct", "enum"
+}
+
+pub struct Analyzer {
+    pub symbols: map.Map<string, Symbol>
+}
+
+impl Analyzer {
+    pub fn new() -> Analyzer {
+        return Analyzer {
+            symbols: map.Map<string, Symbol>.new()
+        };
+    }
+
+    pub fn analyze(self: Analyzer, prog: ast.Program) {
+        let items = prog.items;
+        let i = 0;
+        while (items.len() > i) {
+            let item = items.get(i);
+            when (item) {
+                ast.Item::Function(f) => {
+                    self.symbols.put(f.name, Symbol { name: f.name, kind: "function" });
+                },
+                ast.Item::Struct(s) => {
+                    self.symbols.put(s.name, Symbol { name: s.name, kind: "struct" });
+                },
+                ast.Item::Enum(e) => {
+                    self.symbols.put(e.name, Symbol { name: e.name, kind: "enum" });
+                }
+            }
+            i = i + 1;
+        }
+    }
+}

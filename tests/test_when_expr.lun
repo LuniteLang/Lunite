@@ -1,0 +1,18 @@
+enum Kind {
+    A, B, C
+}
+
+fn test(k: Kind) {
+    when (k) {
+        Kind::A => { print("Matched A"); },
+        Kind::B => { print("Matched B"); },
+        Kind::C => { print("Matched C"); },
+        else => { print("Matched nothing"); }
+    }
+}
+
+fn main() {
+    test(Kind::A);
+    test(Kind::B);
+    test(Kind::C);
+}

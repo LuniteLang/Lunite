@@ -1,5 +1,6 @@
 import "list.lun" as list
 import "token.lun" as tok
+import "map.lun" as map
 
 pub enum Type {
     Int,
@@ -7,8 +8,19 @@ pub enum Type {
     Bool,
     String,
     Void,
-    Custom(string, list.List<Type>),
+    Custom(string), // Đơn giản hóa Type
     Pointer(Type)
+}
+
+pub struct BinaryExpr {
+    pub left: Expression,
+    pub op: tok.TokenKind,
+    pub right: Expression
+}
+
+pub struct CallExpr {
+    pub func: Expression,
+    pub args: list.List<Expression>
 }
 
 pub enum ExpressionKind {
@@ -16,9 +28,9 @@ pub enum ExpressionKind {
     FloatLiteral(float),
     StringLiteral(string),
     Identifier(string),
-    Binary(Expression, tok.TokenKind, Expression),
-    Unary(tok.TokenKind, Expression),
-    Call(Expression, list.List<Expression>)
+    Binary(BinaryExpr),
+    Unary(Expression),
+    Call(CallExpr)
 }
 
 pub struct Expression {
@@ -26,22 +38,88 @@ pub struct Expression {
     pub typ: Type
 }
 
+pub struct LetStmt {
+    pub name: string,
+    pub typ: Type,
+    pub val: Expression
+}
+
+pub struct AssignStmt {
+    pub lvalue: Expression,
+    pub rvalue: Expression
+}
+
+pub struct IfStmt {
+    pub cond: Expression,
+    pub then_branch: list.List<Statement>,
+    pub else_branch: list.List<Statement>
+}
+
+pub struct WhileStmt {
+    pub cond: Expression,
+    pub body: list.List<Statement>
+}
+
 pub enum Statement {
-    Let(string, Type, Expression),
-    Assign(Expression, Expression),
+    Let(LetStmt),
+    Assign(AssignStmt),
     Return(Expression),
-    If(Expression, list.List<Statement>, list.List<Statement>),
-    While(Expression, list.List<Statement>),
+    If(IfStmt),
+    While(WhileStmt),
     Expr(Expression)
 }
 
 pub struct FunctionDecl {
     pub name: string,
-    pub params: list.List<MapEntry>, // Cần MapEntry cho name:type
+    pub params: list.List<map.MapEntry<string, Type> >, 
     pub return_type: Type,
     pub body: list.List<Statement>
 }
 
+pub struct StructDecl {
+
+    pub name: string,
+
+    pub fields: list.List<map.MapEntry<string, Type> >
+
+}
+
+
+
+pub struct EnumVariant {
+
+    pub name: string,
+
+    pub typ: Type // simplified, null if no payload
+
+}
+
+
+
+pub struct EnumDecl {
+
+    pub name: string,
+
+    pub variants: list.List<EnumVariant>
+
+}
+
+
+
+pub enum Item {
+
+    Function(FunctionDecl),
+
+    Struct(StructDecl),
+
+    Enum(EnumDecl)
+
+}
+
+
+
 pub struct Program {
-    pub functions: list.List<FunctionDecl>
+
+    pub items: list.List<Item>
+
 }
