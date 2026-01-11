@@ -4,6 +4,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::{Linkage, Module};
+use inkwell::passes::PassManager;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine,
 };
@@ -36,6 +37,9 @@ pub struct CodeGenerator<'ctx> {
     string_type: StructType<'ctx>,
     personality_fn: FunctionValue<'ctx>,
     pub extern_functions: HashSet<String>,
+    pub opt_level: OptimizationLevel,
+    fpm: PassManager<FunctionValue<'ctx>>,
+    mpm: PassManager<Module<'ctx>>,
 }
 
 struct FunctionCompiler<'a, 'ctx> {
@@ -53,7 +57,7 @@ enum VarLoc<'ctx> {
 }
 
 impl<'ctx> CodeGenerator<'ctx> {
-    pub fn new(context: &'ctx Context) -> Self {
+    pub fn new(context: &'ctx Context, opt_level: OptimizationLevel) -> Self {
         Target::initialize_native(&InitializationConfig::default())
             .expect("Failed to init native target");
         let triple = TargetMachine::get_default_triple();
@@ -358,6 +362,26 @@ impl<'ctx> CodeGenerator<'ctx> {
         extern_functions.insert("lunite_throw".to_string());
         extern_functions.insert("__gxx_personality_v0".to_string());
 
+        let fpm = PassManager::create(&module);
+        let mpm = PassManager::create(());
+
+        if opt_level != OptimizationLevel::None {
+            // TODO: Manual pass additions are broken in this inkwell version for LLVM 19
+            /*
+            fpm.add_instruction_combining_pass();
+            fpm.add_reassociate_pass();
+            fpm.add_gvn_pass();
+            fpm.add_cfg_simplification_pass();
+            fpm.add_promote_memory_to_register_pass();
+
+            mpm.add_dead_arg_elimination_pass();
+            mpm.add_global_dce_pass();
+            mpm.add_function_inline_pass();
+            */
+        }
+
+        fpm.initialize();
+
         Self {
             context,
             module,
@@ -369,6 +393,9 @@ impl<'ctx> CodeGenerator<'ctx> {
             string_type,
             personality_fn: personality,
             extern_functions,
+            opt_level,
+            fpm,
+            mpm,
         }
     }
 
@@ -498,6 +525,13 @@ impl<'ctx> CodeGenerator<'ctx> {
                 }
             }
         }
+
+        // Final module-level optimizations
+        if self.opt_level != OptimizationLevel::None {
+            eprintln!("[CODEGEN] Running module optimizations...");
+            self.mpm.run_on(&self.module);
+        }
+
         eprintln!("[CODEGEN] Compilation finished successfully.");
         Ok(())
     }

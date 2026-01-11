@@ -16,6 +16,7 @@ mod token;
 use ast::Program;
 use codegen::CodeGenerator;
 use inkwell::context::Context;
+use inkwell::OptimizationLevel;
 use lexer::Lexer;
 use parser::Parser;
 use semantic::SemanticAnalyzer;
@@ -42,23 +43,33 @@ fn print_error_report(filename: &str, err: CompileError) {
         let lines: Vec<&str> = content.lines().collect();
         if err.line > 0 && err.line <= lines.len() {
             let line_content = lines[err.line - 1];
+            eprintln!("\n\x1b[1;31merror\x1b[0m: \x1b[1m{}\x1b[0m", err.message);
             eprintln!(
-                "\x1b[1;31mError\x1b[0m in {}:{}:{}",
+                "  \x1b[1;34m--\x1b[0m {}:{}:{}",
                 filename, err.line, err.column
             );
-            eprintln!("   |");
-            eprintln!("{:2} | {}", err.line, line_content);
-            eprintln!(
-                "   | \x1b[1;31m{}^\x1b[0m {}",
-                " ".repeat(err.column),
-                err.message
-            );
-            eprintln!("   |");
+            eprintln!("\x1b[1;34m   |\x1b[0m");
+            eprintln!("\x1b[1;34m{:2} |\x1b[0m {}", err.line, line_content);
+            let pointer = if err.column > 0 {
+                " ".repeat(err.column.saturating_sub(1)) + "^"
+            } else {
+                "^".to_string()
+            };
+            eprintln!("\x1b[1;34m   | \x1b[1;31m{}\x1b[0m", pointer);
+            eprintln!("\x1b[1;34m   |\x1b[0m");
         } else {
-            eprintln!("Error in {}: {}", filename, err.message);
+            eprintln!("\n\x1b[1;31merror\x1b[0m: \x1b[1m{}\x1b[0m", err.message);
+            if err.line > 0 {
+                eprintln!(
+                    "  \x1b[1;34m--\x1b[0m {}:{}:{}",
+                    filename, err.line, err.column
+                );
+            } else {
+                eprintln!("  \x1b[1;34m--\x1b[0m {}", filename);
+            }
         }
     } else {
-        eprintln!("Error reading file {}: {}", filename, err.message);
+        eprintln!("\x1b[1;31merror\x1b[0m: \x1b[1m{}\x1b[0m", err.message);
     }
 }
 
@@ -72,13 +83,17 @@ fn main() {
         eprintln!("  check <file.lun> [--lib-path <path>] Check for errors");
         eprintln!("  fmt <file.lun>                       Format code");
         eprintln!("  doc <file.lun>                       Generate documentation");
+        eprintln!("  init <project_name>                  Initialize a new project");
         eprintln!("  lsp                                  Start Language Server");
+        eprintln!("\nOptions:");
+        eprintln!("  -O0, -O1, -O2, -O3                   Optimization level (default: -O0)");
         std::process::exit(1);
     }
 
     let command = &args[1];
     let mut lib_paths = Vec::new();
     let mut file_arg = None;
+    let mut opt_level = OptimizationLevel::None;
     let mut i = 2;
 
     while i < args.len() {
@@ -90,6 +105,18 @@ fn main() {
                 eprintln!("Error: --lib-path requires a path argument");
                 std::process::exit(1);
             }
+        } else if args[i] == "-O1" {
+            opt_level = OptimizationLevel::Less;
+            i += 1;
+        } else if args[i] == "-O2" {
+            opt_level = OptimizationLevel::Default;
+            i += 1;
+        } else if args[i] == "-O3" {
+            opt_level = OptimizationLevel::Aggressive;
+            i += 1;
+        } else if args[i] == "-O0" {
+            opt_level = OptimizationLevel::None;
+            i += 1;
         } else if args[i].starts_with("-") {
             i += 1; // Skip other flags for now
         } else {
@@ -103,17 +130,17 @@ fn main() {
     match command.as_str() {
         "run" => {
             if let Some(filename) = file_arg {
-                run_file(&filename, lib_paths);
+                run_file(&filename, lib_paths, opt_level);
             } else {
-                eprintln!("Usage: lunite run <file.lun> [--lib-path <path>]");
+                eprintln!("Usage: lunite run <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3]");
                 std::process::exit(1);
             }
         }
         "build" => {
             if let Some(filename) = file_arg {
-                build_file(&filename, lib_paths);
+                build_file(&filename, lib_paths, opt_level);
             } else {
-                eprintln!("Usage: lunite build <file.lun> [--lib-path <path>]");
+                eprintln!("Usage: lunite build <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3]");
                 std::process::exit(1);
             }
         }
@@ -142,6 +169,14 @@ fn main() {
             }
         }
         "lsp" => run_lsp(),
+        "init" => {
+            if let Some(name) = file_arg {
+                run_init(&name);
+            } else {
+                eprintln!("Usage: lunite init <project_name>");
+                std::process::exit(1);
+            }
+        }
         _ => {
             eprintln!("Unknown command: {}", command);
             std::process::exit(1);
@@ -153,14 +188,14 @@ fn parse_modules(_entry_file: &str) -> (HashMap<PathBuf, Program>, HashMap<PathB
     (HashMap::new(), HashMap::new())
 }
 
-fn run_file(filename: &str, lib_paths: Vec<PathBuf>) {
+fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel) {
     let mut analyzer = SemanticAnalyzer::new(lib_paths);
     let main_path = PathBuf::from(filename);
 
     match analyzer.analyze_main(main_path) {
         Ok(modules) => {
             let context = Context::create();
-            let mut generator = CodeGenerator::new(&context);
+            let mut generator = CodeGenerator::new(&context, opt_level);
             if let Err(e) = generator.compile_modules(modules) {
                 print_error_report(filename, e);
                 std::process::exit(1);
@@ -174,7 +209,7 @@ fn run_file(filename: &str, lib_paths: Vec<PathBuf>) {
     }
 }
 
-fn build_file(filename: &str, lib_paths: Vec<PathBuf>) {
+fn build_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel) {
     ensure_runtime_lib();
 
     let args: Vec<String> = std::env::args().collect();
@@ -193,7 +228,7 @@ fn build_file(filename: &str, lib_paths: Vec<PathBuf>) {
     match analyzer.analyze_main(PathBuf::from(filename)) {
         Ok(modules) => {
             let context = Context::create();
-            let mut generator = CodeGenerator::new(&context);
+            let mut generator = CodeGenerator::new(&context, opt_level);
             if let Err(e) = generator.compile_modules(modules) {
                 print_error_report(filename, e);
                 std::process::exit(1);
@@ -237,6 +272,18 @@ fn build_file(filename: &str, lib_paths: Vec<PathBuf>) {
             std::process::exit(1);
         }
     }
+}
+
+fn run_init(name: &str) {
+    println!("Initializing project: {}...", name);
+    let root = PathBuf::from(name);
+    fs::create_dir_all(root.join("src")).expect("Failed to create src dir");
+
+    let main_lun = "import \"std/string.lun\" as str\n\nfn main() {\n    str.println(\"Hello, Lunite!\");\n}\n";
+    fs::write(root.join("src/main.lun"), main_lun).expect("Failed to write main.lun");
+
+    println!("Project {} initialized successfully!", name);
+    println!("To build: cd {} && lunite build src/main.lun", name);
 }
 
 fn ensure_runtime_lib() {

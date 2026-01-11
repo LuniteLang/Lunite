@@ -1,0 +1,7 @@
+import "std/string.lun" as str
+
+fn main() {
+    str.println("Hello, Lunite!")
+    // Lỗi cố ý ở đây: Thiếu dấu chấm phẩy hoặc cú pháp sai
+    Let x = 10
+}
