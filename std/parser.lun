@@ -10,6 +10,10 @@ pub struct Parser {
     pub peek_token: tok.Token
 }
 
+pub fn create(l: lex.Lexer) -> Parser {
+    return Parser::new(l);
+}
+
 impl Parser {
     pub fn new(l: lex.Lexer) -> Parser {
         let p = Parser {
@@ -115,8 +119,14 @@ impl Parser {
     }
 
     pub fn parse_type(self: Parser) -> ast.Type {
+        if (self.cur_token.kind == tok.TokenKind::TokStar) {
+            self.next_token();
+            return ast.Type::Pointer(self.parse_type());
+        }
         when (self.cur_token.kind) {
             tok.TokenKind::TypeInt => { self.next_token(); return ast.Type::Int; },
+            tok.TokenKind::TypeFloat => { self.next_token(); return ast.Type::Float; },
+            tok.TokenKind::TypeBool => { self.next_token(); return ast.Type::Bool; },
             tok.TokenKind::KindString => { self.next_token(); return ast.Type::String; },
             tok.TokenKind::TypeVoid => { self.next_token(); return ast.Type::Void; },
             tok.TokenKind::Identifier(n) => { self.next_token(); return ast.Type::Custom(n); },
@@ -276,27 +286,45 @@ impl Parser {
         when (self.cur_token.kind) {
             tok.TokenKind::Identifier(name) => {
                 self.next_token();
-                if (self.cur_token.kind == tok.TokenKind::TokLParen) {
-                    self.next_token(); // (
-                    let args = list.List<ast.Expression>.new();
-                    if (self.cur_token.kind != tok.TokenKind::TokRParen) {
-                         let arg = self.parse_expression(0);
-                         if (arg != null) { args.push(arg); }
-                         while (self.cur_token.kind == tok.TokenKind::TokComma) {
-                             self.next_token();
-                             let arg2 = self.parse_expression(0);
-                             if (arg2 != null) { args.push(arg2); }
+                let mut expr = ast.Expression { kind: ast.ExpressionKind::Identifier(name), typ: ast.Type::Int };
+                
+                let keep_going = true;
+                while (keep_going) {
+                    if (self.cur_token.kind == tok.TokenKind::TokDot || self.cur_token.kind == tok.TokenKind::TokColonColon) {
+                        self.next_token(); // . or ::
+                        // Expect Identifier
+                        let found = false;
+                        when (self.cur_token.kind) {
+                             tok.TokenKind::Identifier(mem) => {
+                                 self.next_token();
+                                 let m = ast.MemberAccessExpr { object: expr, member: mem };
+                                 expr = ast.Expression { kind: ast.ExpressionKind::MemberAccess(m), typ: ast.Type::Void };
+                                 found = true;
+                             },
+                             else => { keep_going = false; }
+                        }
+                        if (found == false) { keep_going = false; }
+                    } else if (self.cur_token.kind == tok.TokenKind::TokLParen) {
+                         self.next_token(); // (
+                         let args = list.List<ast.Expression>.new();
+                         if (self.cur_token.kind != tok.TokenKind::TokRParen) {
+                              let arg = self.parse_expression(0);
+                              if (arg != null) { args.push(arg); }
+                              while (self.cur_token.kind == tok.TokenKind::TokComma) {
+                                  self.next_token();
+                                  let arg2 = self.parse_expression(0);
+                                  if (arg2 != null) { args.push(arg2); }
+                              }
                          }
+                         if (self.cur_token.kind == tok.TokenKind::TokRParen) { self.next_token(); }
+                         
+                         let c = ast.CallExpr { func: expr, args: args };
+                         expr = ast.Expression { kind: ast.ExpressionKind::Call(c), typ: ast.Type::Void };
+                    } else {
+                        keep_going = false;
                     }
-                    if (self.cur_token.kind == tok.TokenKind::TokRParen) { self.next_token(); }
-                    
-                    let c = ast.CallExpr { 
-                        func: ast.Expression { kind: ast.ExpressionKind::Identifier(name), typ: ast.Type::Void },
-                        args: args
-                    };
-                    return ast.Expression { kind: ast.ExpressionKind::Call(c), typ: ast.Type::Void };
                 }
-                return ast.Expression { kind: ast.ExpressionKind::Identifier(name), typ: ast.Type::Int };
+                return expr;
             },
             tok.TokenKind::IntLiteral(val) => {
                 self.next_token();

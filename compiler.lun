@@ -1,5 +1,14 @@
-import "std/io.lun" as io
+import "std/string.lun" as str
+import "std/lexer.lun" as lex
 
 fn main() {
-    print("Hello");
+    lunite_print_int(1);
+    print("Self-Hosting Compiler - Initial Phase");
+    lunite_print_int(2);
+    let source = "fn hello() {}";
+    lunite_print_int(3);
+    print("Creating Lexer...");
+    let l = lex.create(source);
+    lunite_print_int(4);
+    print("Lexer created.");
 }

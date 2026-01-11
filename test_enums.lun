@@ -1,0 +1,10 @@
+enum MyEnum {
+    A,
+    B(int)
+}
+
+fn main() {
+    let x = MyEnum::A;
+    let y = MyEnum::B(42);
+    print("Enum test finished");
+}

@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
         } else {
             false
         };
-        
+
         self.skip_newlines();
 
         match self.current_token.kind {
@@ -173,7 +173,9 @@ impl<'a> Parser<'a> {
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -207,7 +209,9 @@ impl<'a> Parser<'a> {
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -277,7 +281,9 @@ impl<'a> Parser<'a> {
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -312,7 +318,7 @@ impl<'a> Parser<'a> {
         } else {
             return Err(self.cur_error("Expected string for path"));
         };
-        
+
         let mut alias = None;
         if self.peek_is(&TokenKind::TokAs) {
             self.next_token(); // string -> as
@@ -322,17 +328,16 @@ impl<'a> Parser<'a> {
         Ok(Item::Import { path, alias })
     }
 
-    fn parse_struct_decl(
-        &mut self,
-        visibility: Visibility,
-    ) -> Result<StructDecl, CompileError> {
+    fn parse_struct_decl(&mut self, visibility: Visibility) -> Result<StructDecl, CompileError> {
         self.next_token(); // struct
         let name = self.expect_identifier_string()?;
         self.next_token();
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -385,7 +390,9 @@ impl<'a> Parser<'a> {
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -397,7 +404,7 @@ impl<'a> Parser<'a> {
             let _ = self.parse_type_arguments()?;
             self.next_token(); // move to '>'
             if !self.cur_is(&TokenKind::Greater) {
-                 return Err(self.cur_error("Expected '>' after impl type args"));
+                return Err(self.cur_error("Expected '>' after impl type args"));
             }
             self.next_token(); // move past '>'
         }
@@ -451,7 +458,9 @@ impl<'a> Parser<'a> {
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
             self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>'")); }
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
             self.next_token(); // move past '>'
             gp
         } else {
@@ -594,7 +603,9 @@ impl<'a> Parser<'a> {
             } else {
                 let expr = self.parse_expression(Precedence::Lowest)?;
                 self.next_token();
-                Block { statements: vec![Statement::Expr(expr)] }
+                Block {
+                    statements: vec![Statement::Expr(expr)],
+                }
             };
             arms.push(WhenArm { pattern, body });
             if self.cur_is(&TokenKind::Comma) {
@@ -617,22 +628,32 @@ impl<'a> Parser<'a> {
             current_name = name.clone();
             if self.peek_is(&TokenKind::Dot) || self.peek_is(&TokenKind::ColonColon) {
                 if self.peek_is(&TokenKind::Dot) {
-                    self.next_token(); self.next_token();
+                    self.next_token();
+                    self.next_token();
                     let member = self.expect_identifier_string()?;
-                    current_name.push('.'); current_name.push_str(&member);
+                    current_name.push('.');
+                    current_name.push_str(&member);
                 }
                 if self.peek_is(&TokenKind::ColonColon) {
                     let enum_name = current_name;
-                    self.next_token(); self.next_token();
+                    self.next_token();
+                    self.next_token();
                     let variant_name = self.expect_identifier_string()?;
                     let mut binding = None;
                     if self.peek_is(&TokenKind::LParen) {
-                        self.next_token(); self.next_token();
+                        self.next_token();
+                        self.next_token();
                         binding = Some(self.expect_identifier_string()?);
-                        if !self.peek_is(&TokenKind::RParen) { return Err(self.cur_error("Expected ')'")); }
+                        if !self.peek_is(&TokenKind::RParen) {
+                            return Err(self.cur_error("Expected ')'"));
+                        }
                         self.next_token();
                     }
-                    return Ok(WhenPattern::EnumVariant { enum_name, variant_name, binding });
+                    return Ok(WhenPattern::EnumVariant {
+                        enum_name,
+                        variant_name,
+                        binding,
+                    });
                 }
             }
         }
@@ -642,7 +663,12 @@ impl<'a> Parser<'a> {
 
     fn parse_let_statement(&mut self) -> Result<Statement, CompileError> {
         self.next_token(); // let
-        let is_m = if self.cur_is(&TokenKind::TokMut) { self.next_token(); true } else { false };
+        let is_m = if self.cur_is(&TokenKind::TokMut) {
+            self.next_token();
+            true
+        } else {
+            false
+        };
         let name = self.expect_identifier_string()?;
         self.next_token();
         let type_name = if self.cur_is(&TokenKind::Colon) {
@@ -650,13 +676,20 @@ impl<'a> Parser<'a> {
             let t = self.parse_type()?;
             self.next_token();
             Some(t)
-        } else { None };
+        } else {
+            None
+        };
         let mut val = None;
         if self.cur_is(&TokenKind::Equal) {
             self.next_token();
             val = Some(self.parse_expression(Precedence::Lowest)?);
         }
-        Ok(Statement::Let { name, is_mutable: is_m, type_name, value: val })
+        Ok(Statement::Let {
+            name,
+            is_mutable: is_m,
+            type_name,
+            value: val,
+        })
     }
 
     fn parse_if_statement(&mut self) -> Result<Statement, CompileError> {
@@ -669,14 +702,21 @@ impl<'a> Parser<'a> {
             self.next_token();
         }
         if self.peek_is(&TokenKind::TokElse) {
-            self.next_token(); self.next_token();
+            self.next_token();
+            self.next_token();
             if self.cur_is(&TokenKind::TokIf) {
-                e = Some(Block { statements: vec![self.parse_if_statement()?] });
+                e = Some(Block {
+                    statements: vec![self.parse_if_statement()?],
+                });
             } else {
                 e = Some(self.parse_block()?);
             }
         }
-        Ok(Statement::If { condition: c, then_branch: t, else_branch: e })
+        Ok(Statement::If {
+            condition: c,
+            then_branch: t,
+            else_branch: e,
+        })
     }
 
     fn parse_while_statement(&mut self) -> Result<Statement, CompileError> {
@@ -684,7 +724,10 @@ impl<'a> Parser<'a> {
         let c = self.parse_expression(Precedence::Lowest)?;
         self.next_token();
         let b = self.parse_block()?;
-        Ok(Statement::While { condition: c, body: b })
+        Ok(Statement::While {
+            condition: c,
+            body: b,
+        })
     }
 
     fn parse_try_catch_statement(&mut self) -> Result<Statement, CompileError> {
@@ -692,12 +735,18 @@ impl<'a> Parser<'a> {
         let t = self.parse_block()?;
         self.next_token();
         self.skip_newlines();
-        if !self.cur_is(&TokenKind::TokCatch) { return Err(self.cur_error("Expected catch")); }
+        if !self.cur_is(&TokenKind::TokCatch) {
+            return Err(self.cur_error("Expected catch"));
+        }
         self.next_token();
         let v = self.expect_identifier_string()?;
         self.next_token();
         let c = self.parse_block()?;
-        Ok(Statement::TryCatch { try_block: t, catch_variable: v, catch_block: c })
+        Ok(Statement::TryCatch {
+            try_block: t,
+            catch_variable: v,
+            catch_block: c,
+        })
     }
 
     fn parse_throw_statement(&mut self) -> Result<Statement, CompileError> {
@@ -718,9 +767,13 @@ impl<'a> Parser<'a> {
     fn parse_expression_statement(&mut self) -> Result<Statement, CompileError> {
         let l = self.parse_expression(Precedence::Lowest)?;
         if self.peek_is(&TokenKind::Equal) {
-            self.next_token(); self.next_token();
+            self.next_token();
+            self.next_token();
             let r = self.parse_expression(Precedence::Lowest)?;
-            Ok(Statement::Assign { lvalue: l, value: r })
+            Ok(Statement::Assign {
+                lvalue: l,
+                value: r,
+            })
         } else {
             Ok(Statement::Expr(l))
         }
@@ -742,14 +795,23 @@ impl<'a> Parser<'a> {
                     self.next_token();
                     let args = self.parse_type_arguments()?;
                     self.next_token();
-                    if !self.cur_is(&TokenKind::Greater) { return Err(self.cur_error("Expected '>' in Result type")); }
-                    return Ok(Type::Result(Box::new(args[0].clone()), Box::new(args[1].clone())));
+                    if !self.cur_is(&TokenKind::Greater) {
+                        return Err(self.cur_error("Expected '>' in Result type"));
+                    }
+                    return Ok(Type::Result(
+                        Box::new(args[0].clone()),
+                        Box::new(args[1].clone()),
+                    ));
                 }
                 while self.peek_is(&TokenKind::Dot) {
-                    self.next_token(); self.next_token();
+                    self.next_token();
+                    self.next_token();
                     if let TokenKind::Identifier(suffix) = &self.current_token.kind {
-                        n.push('.'); n.push_str(suffix);
-                    } else { return Err(self.cur_error("Expected identifier after dot")); }
+                        n.push('.');
+                        n.push_str(suffix);
+                    } else {
+                        return Err(self.cur_error("Expected identifier after dot"));
+                    }
                 }
                 if self.peek_is(&TokenKind::Less) {
                     let mut checkpoint = self.clone();
@@ -776,7 +838,8 @@ impl<'a> Parser<'a> {
         let mut params = Vec::new();
         params.push(self.expect_identifier_string()?);
         while self.peek_is(&TokenKind::Comma) {
-            self.next_token(); self.next_token();
+            self.next_token();
+            self.next_token();
             params.push(self.expect_identifier_string()?);
         }
         Ok(params)
@@ -787,7 +850,8 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
         args.push(self.parse_type()?);
         while self.peek_is(&TokenKind::Comma) {
-            self.next_token(); self.next_token();
+            self.next_token();
+            self.next_token();
             args.push(self.parse_type()?);
         }
         Ok(args)
@@ -818,13 +882,18 @@ impl<'a> Parser<'a> {
             TokenKind::Minus | TokenKind::Bang => {
                 let op = self.current_token.kind.clone();
                 self.next_token();
-                Ok(Expression::Unary { operator: op, right: Box::new(self.parse_expression(Precedence::Prefix)?) })
+                Ok(Expression::Unary {
+                    operator: op,
+                    right: Box::new(self.parse_expression(Precedence::Prefix)?),
+                })
             }
             TokenKind::LParen => {
                 self.next_token();
                 let e = self.parse_expression(Precedence::Lowest)?;
                 self.next_token();
-                if !self.cur_is(&TokenKind::RParen) { return Err(self.cur_error("Expected ')'")); }
+                if !self.cur_is(&TokenKind::RParen) {
+                    return Err(self.cur_error("Expected ')'"));
+                }
                 Ok(e)
             }
             TokenKind::TokComptime => {
@@ -834,11 +903,15 @@ impl<'a> Parser<'a> {
             }
             TokenKind::TokSizeof => {
                 self.next_token();
-                if !self.cur_is(&TokenKind::LParen) { return Err(self.cur_error("Expected '('")); }
+                if !self.cur_is(&TokenKind::LParen) {
+                    return Err(self.cur_error("Expected '('"));
+                }
                 self.next_token();
                 let typ = self.parse_type()?;
                 self.next_token();
-                if !self.cur_is(&TokenKind::RParen) { return Err(self.cur_error("Expected ')'")); }
+                if !self.cur_is(&TokenKind::RParen) {
+                    return Err(self.cur_error("Expected ')'"));
+                }
                 Ok(Expression::Sizeof(typ))
             }
             _ => Err(self.cur_error(&format!("No prefix for {:?}", self.current_token.kind))),
@@ -849,7 +922,7 @@ impl<'a> Parser<'a> {
         let n = self.expect_identifier_string()?;
         let mut expr = Expression::Identifier(n.clone());
         let mut current_path = n.clone();
-        
+
         if self.peek_is(&TokenKind::Less) {
             let mut checkpoint = self.clone();
             checkpoint.next_token(); // Move to '<'
@@ -858,7 +931,10 @@ impl<'a> Parser<'a> {
                     checkpoint.next_token(); // Move to '>'
                     if checkpoint.cur_is(&TokenKind::Greater) {
                         *self = checkpoint;
-                        expr = Expression::GenericSpecialization { expression: Box::new(expr), type_args: args };
+                        expr = Expression::GenericSpecialization {
+                            expression: Box::new(expr),
+                            type_args: args,
+                        };
                     }
                 }
                 Err(_) => {}
@@ -867,11 +943,16 @@ impl<'a> Parser<'a> {
 
         loop {
             if self.peek_is(&TokenKind::Dot) {
-                self.next_token(); self.next_token();
+                self.next_token();
+                self.next_token();
                 let f = self.expect_identifier_string()?;
-                expr = Expression::MemberAccess { object: Box::new(expr), field: f.clone() };
-                current_path.push('.'); current_path.push_str(&f);
-                
+                expr = Expression::MemberAccess {
+                    object: Box::new(expr),
+                    field: f.clone(),
+                };
+                current_path.push('.');
+                current_path.push_str(&f);
+
                 if self.peek_is(&TokenKind::Less) {
                     let mut checkpoint = self.clone();
                     checkpoint.next_token(); // Move to '<'
@@ -880,7 +961,10 @@ impl<'a> Parser<'a> {
                             checkpoint.next_token(); // Move to '>'
                             if checkpoint.cur_is(&TokenKind::Greater) {
                                 *self = checkpoint;
-                                expr = Expression::GenericSpecialization { expression: Box::new(expr), type_args: args };
+                                expr = Expression::GenericSpecialization {
+                                    expression: Box::new(expr),
+                                    type_args: args,
+                                };
                             }
                         }
                         Err(_) => {}
@@ -889,18 +973,17 @@ impl<'a> Parser<'a> {
                 continue;
             }
             if self.peek_is(&TokenKind::ColonColon) {
-                let enum_name = current_path.clone();
-                self.next_token(); self.next_token();
-                let variant = self.expect_identifier_string()?;
-                let mut value = None;
-                if self.peek_is(&TokenKind::LParen) {
-                    self.next_token(); self.next_token();
-                    value = Some(Box::new(self.parse_expression(Precedence::Lowest)?));
-                    self.next_token();
-                    if !self.cur_is(&TokenKind::RParen) { return Err(self.cur_error("Expected ')'")); }
-                }
-                expr = Expression::EnumInit { enum_name, variant_name: variant, value, type_args: vec![] };
-                break;
+                self.next_token();
+                self.next_token();
+                let f = self.expect_identifier_string()?;
+                expr = Expression::MemberAccess {
+                    object: Box::new(expr),
+                    field: f.clone(),
+                };
+                current_path.push(':');
+                current_path.push(':');
+                current_path.push_str(&f);
+                continue;
             }
             if self.peek_is(&TokenKind::LBrace) {
                 expr = self.parse_struct_init(expr)?;
@@ -915,14 +998,17 @@ impl<'a> Parser<'a> {
         let (name, t_args) = match expr {
             Expression::Identifier(n) => (n, vec![]),
             Expression::MemberAccess { .. } => (self.expr_to_string(&expr)?, vec![]),
-            Expression::GenericSpecialization { expression, type_args } => {
-                 let n = match *expression {
-                     Expression::Identifier(n) => n,
-                     Expression::MemberAccess { .. } => self.expr_to_string(&expression)?,
-                     _ => return Err(self.cur_error("Invalid generic struct init")),
-                 };
-                 (n, type_args)
-            },
+            Expression::GenericSpecialization {
+                expression,
+                type_args,
+            } => {
+                let n = match *expression {
+                    Expression::Identifier(n) => n,
+                    Expression::MemberAccess { .. } => self.expr_to_string(&expression)?,
+                    _ => return Err(self.cur_error("Invalid generic struct init")),
+                };
+                (n, type_args)
+            }
             _ => return Err(self.cur_error("Invalid struct init")),
         };
         self.next_token();
@@ -930,18 +1016,28 @@ impl<'a> Parser<'a> {
         let mut fields = Vec::new();
         while !self.cur_is(&TokenKind::RBrace) {
             self.skip_newlines();
-            if self.cur_is(&TokenKind::RBrace) { break; }
+            if self.cur_is(&TokenKind::RBrace) {
+                break;
+            }
             let fnm = self.expect_identifier_string()?;
             self.next_token();
-            if !self.cur_is(&TokenKind::Colon) { return Err(self.cur_error("Expected ':'")); }
+            if !self.cur_is(&TokenKind::Colon) {
+                return Err(self.cur_error("Expected ':'"));
+            }
             self.next_token();
             let fval = self.parse_expression(Precedence::Lowest)?;
             self.next_token();
             fields.push((fnm, fval));
-            if self.cur_is(&TokenKind::Comma) { self.next_token(); }
+            if self.cur_is(&TokenKind::Comma) {
+                self.next_token();
+            }
             self.skip_newlines();
         }
-        Ok(Expression::StructInit { name, fields, type_args: t_args })
+        Ok(Expression::StructInit {
+            name,
+            fields,
+            type_args: t_args,
+        })
     }
 
     fn expr_to_string(&self, expr: &Expression) -> Result<String, CompileError> {
@@ -978,7 +1074,11 @@ impl<'a> Parser<'a> {
             | TokenKind::PipePipe
             | TokenKind::Caret => {
                 self.next_token();
-                Ok(Expression::Binary { left: Box::new(left), operator: op, right: Box::new(self.parse_expression(pr)?) })
+                Ok(Expression::Binary {
+                    left: Box::new(left),
+                    operator: op,
+                    right: Box::new(self.parse_expression(pr)?),
+                })
             }
             TokenKind::LParen => {
                 let mut args = Vec::new();
@@ -991,28 +1091,49 @@ impl<'a> Parser<'a> {
                         args.push(self.parse_expression(Precedence::Lowest)?);
                         self.next_token();
                     }
-                } else { self.next_token(); }
-                if !self.cur_is(&TokenKind::RParen) { return Err(self.cur_error("Expected )")); }
-                Ok(Expression::Call { function: Box::new(left), args, type_args: vec![] })
+                } else {
+                    self.next_token();
+                }
+                if !self.cur_is(&TokenKind::RParen) {
+                    return Err(self.cur_error("Expected )"));
+                }
+                Ok(Expression::Call {
+                    function: Box::new(left),
+                    args,
+                    type_args: vec![],
+                })
             }
             TokenKind::Dot => {
                 self.next_token();
                 let f = self.expect_identifier_string()?;
-                Ok(Expression::MemberAccess { object: Box::new(left), field: f })
+                Ok(Expression::MemberAccess {
+                    object: Box::new(left),
+                    field: f,
+                })
             }
             TokenKind::LBracket => {
                 self.next_token();
                 let index = self.parse_expression(Precedence::Lowest)?;
                 self.next_token();
-                if !self.cur_is(&TokenKind::RBracket) { return Err(self.cur_error("Expected ']'")); }
-                Ok(Expression::Index { left: Box::new(left), index: Box::new(index) })
+                if !self.cur_is(&TokenKind::RBracket) {
+                    return Err(self.cur_error("Expected ']'"));
+                }
+                Ok(Expression::Index {
+                    left: Box::new(left),
+                    index: Box::new(index),
+                })
             }
             TokenKind::TokAs => {
                 self.next_token();
                 let target_type = self.parse_type()?;
-                Ok(Expression::Cast { expression: Box::new(left), target_type })
+                Ok(Expression::Cast {
+                    expression: Box::new(left),
+                    target_type,
+                })
             }
-            TokenKind::Question => Ok(Expression::Try { expression: Box::new(left) }),
+            TokenKind::Question => Ok(Expression::Try {
+                expression: Box::new(left),
+            }),
             _ => Err(self.cur_error("No infix")),
         }
     }

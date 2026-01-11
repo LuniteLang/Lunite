@@ -11,9 +11,14 @@ pub struct Lexer {
     pub col: int
 }
 
+pub fn create(input: string) -> Lexer {
+    return Lexer::new(input);
+}
+
 impl Lexer {
     pub fn new(input: string) -> Lexer {
-        io.log(io.Level::DEBUG, "Inside Lexer.new");
+        // io.log(io.Level::DEBUG, "Inside Lexer.new");
+        str.print("Lexer new");
         let l = Lexer {
             input: input,
             pos: 0,
@@ -22,6 +27,7 @@ impl Lexer {
             line: 1,
             col: 0
         };
+        str.print("Calling read_char");
         l.read_char();
         return l;
     }

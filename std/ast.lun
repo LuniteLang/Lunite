@@ -1,5 +1,5 @@
-import "list.lun" as list
 import "token.lun" as tok
+import "list.lun" as list
 import "map.lun" as map
 
 pub enum Type {
@@ -8,12 +8,33 @@ pub enum Type {
     Bool,
     String,
     Void,
-    Custom(string), // Đơn giản hóa Type
+    Custom(string),
     Pointer(Type)
+}
+
+pub enum ExpressionKind {
+    IntLiteral(int),
+    FloatLiteral(float),
+    StringLiteral(string),
+    Identifier(string),
+    Binary(BinaryExpr),
+    Unary(UnaryExpr),
+    Call(CallExpr),
+    MemberAccess(MemberAccessExpr)
+}
+
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub typ: Type
 }
 
 pub struct BinaryExpr {
     pub left: Expression,
+    pub op: tok.TokenKind,
+    pub right: Expression
+}
+
+pub struct UnaryExpr {
     pub op: tok.TokenKind,
     pub right: Expression
 }
@@ -23,30 +44,23 @@ pub struct CallExpr {
     pub args: list.List<Expression>
 }
 
-pub enum ExpressionKind {
-    IntLiteral(int),
-    FloatLiteral(float),
-    StringLiteral(string),
-    Identifier(string),
-    Binary(BinaryExpr),
-    Unary(Expression),
-    Call(CallExpr)
+pub struct MemberAccessExpr {
+    pub object: Expression,
+    pub member: string
 }
 
-pub struct Expression {
-    pub kind: ExpressionKind,
-    pub typ: Type
+pub enum Statement {
+    Let(LetStmt),
+    Return(Expression),
+    Expr(Expression),
+    If(IfStmt),
+    While(WhileStmt)
 }
 
 pub struct LetStmt {
     pub name: string,
     pub typ: Type,
     pub val: Expression
-}
-
-pub struct AssignStmt {
-    pub lvalue: Expression,
-    pub rvalue: Expression
 }
 
 pub struct IfStmt {
@@ -60,66 +74,34 @@ pub struct WhileStmt {
     pub body: list.List<Statement>
 }
 
-pub enum Statement {
-    Let(LetStmt),
-    Assign(AssignStmt),
-    Return(Expression),
-    If(IfStmt),
-    While(WhileStmt),
-    Expr(Expression)
-}
-
 pub struct FunctionDecl {
     pub name: string,
-    pub params: list.List<map.MapEntry<string, Type> >, 
+    pub params: list.List<map.MapEntry<string, Type> >,
     pub return_type: Type,
     pub body: list.List<Statement>
 }
 
 pub struct StructDecl {
-
     pub name: string,
-
     pub fields: list.List<map.MapEntry<string, Type> >
-
 }
-
-
 
 pub struct EnumVariant {
-
     pub name: string,
-
-    pub typ: Type // simplified, null if no payload
-
+    pub typ: Type
 }
-
-
 
 pub struct EnumDecl {
-
     pub name: string,
-
     pub variants: list.List<EnumVariant>
-
 }
-
-
 
 pub enum Item {
-
     Function(FunctionDecl),
-
     Struct(StructDecl),
-
     Enum(EnumDecl)
-
 }
 
-
-
 pub struct Program {
-
     pub items: list.List<Item>
-
 }

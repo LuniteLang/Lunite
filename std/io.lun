@@ -12,6 +12,12 @@ pub fn write_file(path: string, content: string) -> bool {
     return res == 0;
 }
 
+extern fn lunite_io_read_file_str(path: string) -> string
+
+pub fn read_file_text(path: string) -> string {
+    return lunite_io_read_file_str(path);
+}
+
 pub enum Level {
     ERROR,
     WARN,
