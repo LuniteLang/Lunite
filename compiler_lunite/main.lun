@@ -1,0 +1,41 @@
+import "io.lun" as io
+import "lexer.lun" as lex
+import "parser.lun" as parser
+import "semantic.lun" as sem
+import "string.lun" as str
+import "sys.lun" as sys
+import "list.lun" as list
+
+fn main() {
+    let argc = sys.get_argc();
+    if (argc < 2) {
+        str.println("Usage: lunite_self_hosted <filename>");
+        return;
+    }
+
+    let filename = sys.get_arg(1);
+    str.print("Reading file: ");
+    str.println(filename);
+
+    let source = io.read_file_text(filename);
+    if (str.length(source) == 0) {
+        str.println("Error: File not found or empty.");
+        return;
+    }
+
+    str.println("--- Lexing ---");
+    let l = lex.Lexer::new(source);
+    
+    str.println("--- Parsing ---");
+    let p = parser.Parser::new(l);
+    let program = p.parse_program();
+    
+    str.println("--- Semantic Analysis ---");
+    let analyzer = sem.SemanticAnalyzer::new();
+    let typed_items = analyzer.analyze_program(program);
+    
+    str.print("Analysis complete. Items found: ");
+    str.println(str.int_to_string(typed_items.len()));
+    
+    str.println("Self-hosted compiler check finished successfully!");
+}

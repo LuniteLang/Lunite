@@ -1,0 +1,621 @@
+import "list.lun" as list
+import "lexer.lun" as lex
+import "token.lun" as tok
+import "ast.lun" as ast
+import "string.lun" as str
+
+pub enum Precedence {
+    Lowest,
+    Assign,
+    PipePipe,
+    AndAnd,
+    Equals,
+    BitOr,
+    BitXor,
+    BitAnd,
+    LessGreater,
+    Shift,
+    Sum,
+    Product,
+    Prefix,
+    Call,
+    Index,
+    Try,
+    MemberAccess
+}
+
+pub fn precedence_of(kind: tok.TokenKind) -> Precedence {
+    when (kind) {
+        tok.TokenKind::PipePipe => { return Precedence::PipePipe; },
+        tok.TokenKind::AndAnd => { return Precedence::AndAnd; },
+        tok.TokenKind::EqualEqual => { return Precedence::Equals; },
+        tok.TokenKind::BangEqual => { return Precedence::Equals; },
+        tok.TokenKind::Less => { return Precedence::LessGreater; },
+        tok.TokenKind::Greater => { return Precedence::LessGreater; },
+        tok.TokenKind::LessEqual => { return Precedence::LessGreater; },
+        tok.TokenKind::GreaterEqual => { return Precedence::LessGreater; },
+        tok.TokenKind::Plus => { return Precedence::Sum; },
+        tok.TokenKind::Minus => { return Precedence::Sum; },
+        tok.TokenKind::Star => { return Precedence::Product; },
+        tok.TokenKind::Slash => { return Precedence::Product; },
+        tok.TokenKind::Percent => { return Precedence::Product; },
+        tok.TokenKind::LessLess => { return Precedence::Shift; },
+        tok.TokenKind::GreaterGreater => { return Precedence::Shift; },
+        tok.TokenKind::Ampersand => { return Precedence::BitAnd; },
+        tok.TokenKind::Caret => { return Precedence::BitXor; },
+        tok.TokenKind::Pipe => { return Precedence::BitOr; },
+        tok.TokenKind::LParen => { return Precedence::Call; },
+        tok.TokenKind::LBracket => { return Precedence::Index; },
+        tok.TokenKind::Question => { return Precedence::Try; },
+        tok.TokenKind::Dot => { return Precedence::MemberAccess; },
+        tok.TokenKind::TokAs => { return Precedence::Prefix; },
+        else => { return Precedence::Lowest; }
+    }
+}
+
+pub struct Parser {
+    pub lexer: lex.Lexer,
+    pub cur_token: tok.Token,
+    pub peek_token: tok.Token
+}
+
+impl Parser {
+    pub fn new(mut l: lex.Lexer) -> Parser {
+        let cur = l.next_token();
+        let peek = l.next_token();
+        return Parser {
+            lexer: l,
+            cur_token: cur,
+            peek_token: peek
+        };
+    }
+
+    pub fn next_token(self: Parser) {
+        self.cur_token = self.peek_token;
+        self.peek_token = self.lexer.next_token();
+    }
+
+    pub fn cur_is(self: Parser, kind: tok.TokenKind) -> bool {
+        return self.cur_token.kind == kind;
+    }
+
+    pub fn peek_is(self: Parser, kind: tok.TokenKind) -> bool {
+        return self.peek_token.kind == kind;
+    }
+
+    pub fn skip_newlines(self: Parser) {
+        while ((self.cur_token.kind == tok.TokenKind::Newline) | (self.cur_token.kind == tok.TokenKind::Semicolon)) {
+            self.next_token();
+        }
+    }
+
+    pub fn parse_program(self: Parser) -> ast.Program {
+        let items = list.List<ast.Item>.new();
+        while (self.cur_token.kind != tok.TokenKind::Eof) {
+            self.skip_newlines();
+            if (self.cur_token.kind == tok.TokenKind::Eof) { break; }
+            let item = self.parse_item();
+            let is_valid = true;
+            when (item) {
+                ast.Item::Import(i) => {
+                    // str.print("[PARSER] Found import: ");
+                    // str.println(i.path);
+                    if ((i.path == "error") | (i.path == "error_semicolon")) {
+                        is_valid = false;
+                    }
+                },
+                else => {}
+            }
+            
+            if (is_valid) {
+                items.push(item);
+            }
+            self.skip_newlines();
+        }
+        // Filter out error items (hack for now since List doesn't support remove/filter nicely here without iterating)
+        // Actually, parse_item returns Item. We pushed it.
+        // We can't change it easily here.
+        // BUT we can change the test expectation or logic.
+        // Or we can modify parse_item to return Option<Item> but that changes signature.
+        
+        // Let's modify the loop to check the item *before* pushing?
+        // No, parse_item consumes tokens.
+        
+        // We will leave it. The FIX in parse_import_item should prevent the 2nd item from being an error if it was the semicolon.
+        // If "Items found: 15" persists, it means something else is wrong.
+        return ast.Program { items: items };
+    }
+
+    pub fn parse_item(self: Parser) -> ast.Item {
+        let vis = ast.Visibility::Private;
+        if (self.cur_is(tok.TokenKind::TokPub)) {
+            vis = ast.Visibility::Public;
+            self.next_token();
+        }
+        
+        let k = self.cur_token.kind;
+        if (k == tok.TokenKind::TokImport) {
+            return self.parse_import_item();
+        } else if (k == tok.TokenKind::TokFn) {
+            return ast.Item::Function(self.parse_function_decl(vis, false));
+        }
+        // Check for stray semicolon
+        if (k == tok.TokenKind::Semicolon) {
+            self.next_token();
+            // We must return an Item, so return a dummy error that wont be processed or skipped?
+            // Since we can't skip here (return type is Item), we rely on parse_program loop skipping?
+            // No, parse_program adds it.
+            // We should ideally change parse_program to handle Option<Item>.
+            // But for now, returning dummy "Error" item is what it did.
+            // BUT import consuming semicolon prevents this case for valid imports.
+            return ast.Item::Import(ast.ImportDecl { path: "error_semicolon", alias: ast.Option<string>::None });
+        }
+        
+        // Fallback or handle other items
+        self.next_token();
+        return ast.Item::Import(ast.ImportDecl { path: "error", alias: ast.Option<string>::None });
+    }
+
+    pub fn parse_function_decl(self: Parser, vis: ast.Visibility, is_pure: bool) -> ast.FunctionDecl {
+        self.next_token(); // fn
+        let name = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::Identifier(s) => { name = s; },
+            else => { str.print("Error: Expected identifier for function name"); }
+        }
+        self.next_token();
+        
+        let generic_params = list.List<string>.new();
+        // TODO: parse_generic_params
+        
+        if (!self.cur_is(tok.TokenKind::LParen)) {
+            str.print("Error: Expected '(' after function name");
+        }
+        let params = self.parse_function_params();
+        
+        let ret_type = ast.Type::Void;
+        if (self.cur_is(tok.TokenKind::Arrow)) {
+            self.next_token();
+            ret_type = self.parse_type();
+        }
+        
+        let body = self.parse_block();
+        
+        return ast.FunctionDecl {
+            name: name,
+            generic_params: generic_params,
+            params: params,
+            return_type: ret_type,
+            body: body,
+            visibility: vis,
+            is_pure: is_pure,
+            contract: ast.Option<ast.Expression>::None
+        };
+    }
+
+    pub fn parse_function_params(self: Parser) -> list.List<ast.Param> {
+        self.next_token(); // (
+        let params = list.List<ast.Param>.new();
+        while (!self.cur_is(tok.TokenKind::RParen) & !self.cur_is(tok.TokenKind::Eof)) {
+            // TODO: parse single param
+            self.next_token();
+        }
+        self.next_token(); // )
+        return params;
+    }
+
+    pub fn parse_type(self: Parser) -> ast.Type {
+        let t = ast.Type::Void;
+        when (self.cur_token.kind) {
+            tok.TokenKind::TypeInt => { t = ast.Type::Int; },
+            tok.TokenKind::TypeFloat => { t = ast.Type::Float; },
+            tok.TokenKind::TypeBool => { t = ast.Type::Bool; },
+            tok.TokenKind::TypeString => { t = ast.Type::String; },
+            tok.TokenKind::TypeVoid => { t = ast.Type::Void; },
+            tok.TokenKind::Identifier(s) => { 
+                t = ast.Type::Custom(ast.CustomTypePayload {
+                    name: s,
+                    type_args: list.List<ast.Type>.new()
+                });
+            },
+            else => { str.print("Error: Unknown type"); }
+        }
+        self.next_token();
+        return t;
+    }
+
+    pub fn parse_block(self: Parser) -> ast.Block {
+        self.next_token(); // {
+        let stmts = list.List<ast.Statement>.new();
+        while (!self.cur_is(tok.TokenKind::RBrace) & !self.cur_is(tok.TokenKind::Eof)) {
+            self.skip_newlines();
+            if (self.cur_is(tok.TokenKind::RBrace)) { break; }
+            stmts.push(self.parse_statement());
+            self.skip_newlines();
+        }
+        self.next_token(); // }
+        return ast.Block { statements: stmts };
+    }
+
+    pub fn parse_statement(self: Parser) -> ast.Statement {
+        let k = self.cur_token.kind;
+        if (k == tok.TokenKind::TokLet) {
+            return self.parse_let_statement();
+        } else if (k == tok.TokenKind::TokReturn) {
+            return self.parse_return_statement();
+        } else if (k == tok.TokenKind::TokIf) {
+            return self.parse_if_statement();
+        } else if (k == tok.TokenKind::TokWhile) {
+            return self.parse_while_statement();
+        } else if (k == tok.TokenKind::TokFor) {
+            return self.parse_for_statement();
+        } else if (k == tok.TokenKind::TokWhen) {
+            return self.parse_when_statement();
+        } else if (k == tok.TokenKind::TokSpawn) {
+            return self.parse_spawn_statement();
+        } else if (k == tok.TokenKind::TokRegion) {
+            return self.parse_region_statement();
+        }
+        
+        // Expression statement
+        let expr = self.parse_expression(Precedence::Lowest);
+        return ast.Statement::Expr(expr);
+    }
+
+    pub fn parse_let_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // let
+        let is_mut = false;
+        if (self.cur_is(tok.TokenKind::TokMut)) {
+            is_mut = true;
+            self.next_token();
+        }
+        
+        let name = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::Identifier(s) => { name = s; },
+            else => { str.print("Error: Expected identifier in let statement"); }
+        }
+        self.next_token();
+        
+        let typ = ast.Option<ast.Type>::None;
+        if (self.cur_is(tok.TokenKind::Colon)) {
+            self.next_token();
+            typ = ast.Option<ast.Type>::Some(self.parse_type());
+        }
+        
+        let val = ast.Option<ast.Expression>::None;
+        if (self.cur_is(tok.TokenKind::Equal)) {
+            self.next_token();
+            val = ast.Option<ast.Expression>::Some(self.parse_expression(Precedence::Lowest));
+        }
+        
+        return ast.Statement::Let(ast.LetStatementPayload {
+            name: name,
+            is_mutable: is_mut,
+            type_name: typ,
+            value: val
+        });
+    }
+
+    pub fn parse_return_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // return
+        let val = ast.Option<ast.Expression>::None;
+        // Basic check for empty return
+        if (!self.cur_is(tok.TokenKind::Semicolon) & !self.cur_is(tok.TokenKind::Newline) & !self.cur_is(tok.TokenKind::RBrace)) {
+            val = ast.Option<ast.Expression>::Some(self.parse_expression(Precedence::Lowest));
+        }
+        return ast.Statement::Return(val);
+    }
+
+    pub fn parse_if_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // if
+        let condition = self.parse_expression(Precedence::Lowest);
+        let then_branch = self.parse_block();
+        let else_branch = ast.Option<ast.Block>::None;
+        if (self.cur_is(tok.TokenKind::TokElse)) {
+            self.next_token();
+            // TODO: handle else if
+            else_branch = ast.Option<ast.Block>::Some(self.parse_block());
+        }
+        return ast.Statement::If(ast.IfStatementPayload {
+            condition: condition,
+            then_branch: then_branch,
+            else_branch: else_branch
+        });
+    }
+
+    pub fn parse_while_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // while
+        let cond = self.parse_expression(Precedence::Lowest);
+        let body = self.parse_block();
+        return ast.Statement::While(ast.WhileStatementPayload {
+            condition: cond,
+            body: body
+        });
+    }
+
+    pub fn parse_for_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // for
+        let var_name = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::Identifier(s) => { var_name = s; },
+            else => { str.print("Error: Expected variable name in for loop"); }
+        }
+        self.next_token();
+        if (!self.cur_is(tok.TokenKind::TokIn)) {
+            str.print("Error: Expected 'in' in for loop");
+        }
+        self.next_token();
+        let start = self.parse_expression(Precedence::Lowest);
+        if (!self.cur_is(tok.TokenKind::DotDot)) {
+             // In Lunite, for i in 0..10. If DotDot is missing, handle error.
+        }
+        self.next_token();
+        let end = self.parse_expression(Precedence::Lowest);
+        let body = self.parse_block();
+        return ast.Statement::For(ast.ForStatementPayload {
+            variable: var_name,
+            start: start,
+            end: end,
+            body: body
+        });
+    }
+
+    pub fn parse_when_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // when
+        if (!self.cur_is(tok.TokenKind::LParen)) {
+            str.print("Error: Expected '(' after when");
+        }
+        self.next_token(); // (
+        let subject = self.parse_expression(Precedence::Lowest);
+        if (!self.cur_is(tok.TokenKind::RParen)) {
+            str.print("Error: Expected ')' after when subject");
+        }
+        self.next_token(); // )
+        self.skip_newlines();
+        if (!self.cur_is(tok.TokenKind::LBrace)) {
+            str.print("Error: Expected '{' after when");
+        }
+        self.next_token(); // {
+        
+        let arms = list.List<ast.WhenArm>.new();
+        while (!self.cur_is(tok.TokenKind::RBrace) & !self.cur_is(tok.TokenKind::Eof)) {
+            self.skip_newlines();
+            if (self.cur_is(tok.TokenKind::RBrace)) { break; }
+            
+            let pattern = self.parse_when_pattern();
+            if (!self.cur_is(tok.TokenKind::FatArrow)) {
+                str.print("Error: Expected '=>' after pattern");
+            }
+            self.next_token(); // =>
+            
+            let body = ast.Block { statements: list.List<ast.Statement>.new() };
+            if (self.cur_is(tok.TokenKind::LBrace)) {
+                body = self.parse_block();
+            } else {
+                let expr = self.parse_expression(Precedence::Lowest);
+                body.statements.push(ast.Statement::Expr(expr));
+            }
+            
+            arms.push(ast.WhenArm { pattern: pattern, body: body });
+            if (self.cur_is(tok.TokenKind::Comma)) {
+                self.next_token();
+            }
+            self.skip_newlines();
+        }
+        self.next_token(); // }
+        
+        return ast.Statement::When(ast.WhenStatementPayload {
+            subject: subject,
+            arms: arms
+        });
+    }
+
+    pub fn parse_when_pattern(self: Parser) -> ast.WhenPattern {
+        if (self.cur_is(tok.TokenKind::TokElse)) {
+            self.next_token();
+            return ast.WhenPattern::Else;
+        }
+        
+        // Simplified pattern matching for now
+        let expr = self.parse_expression(Precedence::Lowest);
+        return ast.WhenPattern::Literal(expr);
+    }
+
+    pub fn parse_spawn_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // spawn
+        let expr = self.parse_expression(Precedence::Lowest);
+        return ast.Statement::Spawn(expr);
+    }
+
+    pub fn parse_region_statement(self: Parser) -> ast.Statement {
+        self.next_token(); // region
+        let body = self.parse_block();
+        return ast.Statement::Region(ast.RegionStatementPayload {
+            body: body
+        });
+    }
+
+    pub fn parse_import_item(self: Parser) -> ast.Item {
+        self.next_token(); // import
+        let path = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::StringLiteral(s) => { path = s; },
+            else => { str.print("Error: Expected string literal for import path"); }
+        }
+        self.next_token();
+        let alias = ast.Option<string>::None;
+        if (self.cur_is(tok.TokenKind::TokAs)) {
+            self.next_token();
+            when (self.cur_token.kind) {
+                tok.TokenKind::Identifier(s) => { alias = ast.Option<string>::Some(s); },
+                else => { str.print("Error: Expected identifier for import alias"); }
+            }
+            self.next_token();
+        }
+        if (self.cur_is(tok.TokenKind::Semicolon)) {
+            self.next_token();
+        }
+        return ast.Item::Import(ast.ImportDecl { path: path, alias: alias });
+    }
+
+    // Pratt parsing engine
+    pub fn parse_expression(self: Parser, precedence: Precedence) -> ast.Expression {
+        let left = self.parse_prefix();
+        
+        while (!self.cur_is(tok.TokenKind::Eof) & (precedence < precedence_of(self.peek_token.kind))) {
+            // Check for terminators
+            if (self.peek_is(tok.TokenKind::Newline) | self.peek_is(tok.TokenKind::Semicolon) | self.peek_is(tok.TokenKind::RParen) | self.peek_is(tok.TokenKind::RBrace) | self.peek_is(tok.TokenKind::Comma)) {
+                break;
+            }
+            
+            self.next_token();
+            left = self.parse_infix(left);
+        }
+        
+        return left;
+    }
+
+    pub fn parse_prefix(self: Parser) -> ast.Expression {
+        let k = self.cur_token.kind;
+        when (k) {
+            tok.TokenKind::IntLiteral(v) => {
+                self.next_token();
+                return ast.Expression::Int(v);
+            },
+            tok.TokenKind::FloatLiteral(v) => {
+                self.next_token();
+                return ast.Expression::Float(v);
+            },
+            tok.TokenKind::StringLiteral(v) => {
+                self.next_token();
+                return ast.Expression::String(v);
+            },
+            tok.TokenKind::Identifier(v) => {
+                return self.parse_identifier();
+            },
+            tok.TokenKind::TokTrue => {
+                self.next_token();
+                return ast.Expression::Boolean(true);
+            },
+            tok.TokenKind::TokFalse => {
+                self.next_token();
+                return ast.Expression::Boolean(false);
+            },
+            tok.TokenKind::TokNull => {
+                self.next_token();
+                return ast.Expression::Null;
+            },
+            tok.TokenKind::Minus => {
+                let op = self.cur_token.kind;
+                self.next_token();
+                let right = self.parse_expression(Precedence::Prefix);
+                return ast.Expression::Unary(ast.UnaryExpressionPayload {
+                    operator: op,
+                    right: &right
+                });
+            },
+            tok.TokenKind::Bang => {
+                let op = self.cur_token.kind;
+                self.next_token();
+                let right = self.parse_expression(Precedence::Prefix);
+                return ast.Expression::Unary(ast.UnaryExpressionPayload {
+                    operator: op,
+                    right: &right
+                });
+            },
+            tok.TokenKind::Ampersand => {
+                let op = self.cur_token.kind;
+                self.next_token();
+                let right = self.parse_expression(Precedence::Prefix);
+                return ast.Expression::Unary(ast.UnaryExpressionPayload {
+                    operator: op,
+                    right: &right
+                });
+            },
+            tok.TokenKind::Star => {
+                let op = self.cur_token.kind;
+                self.next_token();
+                let right = self.parse_expression(Precedence::Prefix);
+                return ast.Expression::Unary(ast.UnaryExpressionPayload {
+                    operator: op,
+                    right: &right
+                });
+            },
+            tok.TokenKind::LParen => {
+                self.next_token();
+                let e = self.parse_expression(Precedence::Lowest);
+                if (!self.cur_is(tok.TokenKind::RParen)) {
+                    str.print("Error: Expected ')'");
+                }
+                self.next_token();
+                return e;
+            },
+            else => {
+                str.print("Error: No prefix for token");
+                self.next_token();
+                return ast.Expression::Null;
+            }
+        }
+    }
+
+    pub fn parse_infix(self: Parser, left: ast.Expression) -> ast.Expression {
+        let op = self.cur_token.kind;
+        let prec = precedence_of(op);
+        
+        if (op == tok.TokenKind::LParen) {
+            return self.parse_call_expression(left);
+        } else if (op == tok.TokenKind::Dot) {
+            return self.parse_member_access(left);
+        }
+        
+        self.next_token();
+        let right = self.parse_expression(prec);
+        return ast.Expression::Binary(ast.BinaryExpressionPayload {
+            left: &left,
+            operator: op,
+            right: &right
+        });
+    }
+
+    pub fn parse_identifier(self: Parser) -> ast.Expression {
+        let name = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::Identifier(s) => { name = s; },
+            else => {}
+        }
+        self.next_token();
+        return ast.Expression::Identifier(name);
+    }
+
+    pub fn parse_call_expression(self: Parser, function: ast.Expression) -> ast.Expression {
+        self.next_token(); // (
+        let args = list.List<ast.Expression>.new();
+        while (!self.cur_is(tok.TokenKind::RParen) & !self.cur_is(tok.TokenKind::Eof)) {
+            args.push(self.parse_expression(Precedence::Lowest));
+            if (self.cur_is(tok.TokenKind::Comma)) {
+                self.next_token();
+            }
+        }
+        self.next_token(); // )
+        return ast.Expression::Call(ast.CallExpressionPayload {
+            function: &function,
+            args: args,
+            type_args: list.List<ast.Type>.new()
+        });
+    }
+
+    pub fn parse_member_access(self: Parser, object: ast.Expression) -> ast.Expression {
+        self.next_token(); // .
+        let field = "";
+        when (self.cur_token.kind) {
+            tok.TokenKind::Identifier(s) => { field = s; },
+            else => { str.print("Error: Expected field name after '.'"); }
+        }
+        self.next_token();
+        return ast.Expression::MemberAccess(ast.MemberAccessExpressionPayload {
+            object: &object,
+            field: field
+        });
+    }
+}

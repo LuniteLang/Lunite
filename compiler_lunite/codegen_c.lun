@@ -1,0 +1,19 @@
+import "ast.lun" as ast
+
+pub struct CodegenC {
+    pub output: string
+}
+
+pub fn create() -> CodegenC {
+    return CodegenC::new();
+}
+
+impl CodegenC {
+    pub fn new() -> CodegenC {
+        return CodegenC { output: "" };
+    }
+
+    pub fn generate(self: CodegenC, p: ast.Program) -> string {
+        return "void main() {}";
+    }
+}
