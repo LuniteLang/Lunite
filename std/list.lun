@@ -31,6 +31,10 @@ impl<T> List<T> {
         return self.data[index];
     }
 
+    pub fn get_ptr(self: List<T>, index: int) -> *T {
+        return &self.data[index];
+    }
+
     pub fn len(self: List<T>) -> int {
         return self.count;
     }

@@ -20,9 +20,9 @@ impl<K, V> Map<K, V> {
         let i = 0;
         let found = false;
         while (self.entries.len() > i) {
-            let entry = self.entries.get(i);
-            if (entry.key == key) {
-                entry.value = value;
+            let entry_ptr = self.entries.get_ptr(i);
+            if (entry_ptr.key == key) {
+                entry_ptr.value = value;
                 found = true;
             }
             i = i + 1;

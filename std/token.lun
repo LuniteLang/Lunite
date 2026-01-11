@@ -1,34 +1,34 @@
 pub enum TokenKind {
     Illegal,
-    EOF,
+    Eof,
     Identifier(string),
     IntLiteral(int),
     FloatLiteral(float),
     StringLiteral(string),
     
     // Operators
-    TokPlus, TokMinus, TokStar, TokSlash, TokPercent,
-    TokEqual, TokEqualEqual,
-    TokBang, TokBangEqual,
-    TokLess, TokLessEqual, TokGreater, TokGreaterEqual,
-    TokAmpersand, TokPipe, TokCaret, TokLessLess, TokGreaterGreater,
-    TokAndAnd, TokPipePipe,
-    TokQuestion,
+    Plus, Minus, Star, Slash, Percent,
+    Equal, EqualEqual,
+    Bang, BangEqual,
+    Less, LessEqual, Greater, GreaterEqual,
+    Ampersand, Pipe, Caret, LessLess, GreaterGreater,
+    AndAnd, PipePipe,
+    Question,
     
     // Punctuation
-    TokLParen, TokRParen, TokLBrace, TokRBrace, TokLBracket, TokRBracket,
-    TokColon, TokColonColon, TokComma, TokDot, TokArrow, TokFatArrow,
-    TokSemicolon, TokNewline,
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket,
+    Colon, ColonColon, Comma, Dot, DotDot, Arrow, FatArrow,
+    Semicolon, Newline,
 
     // Keywords
     TokFn, TokLet, TokReturn, TokIf, TokElse, TokWhile, TokFor, TokIn,
     TokStruct, TokEnum, TokImpl, TokUse, TokImport, TokExtern, TokNative,
-    TokPub, TokPure, TokTry, TokCatch, TokThrow,
-    TokTrue, TokFalse, TokNull, TokMut, TokWhen, TokAs,
+    TokPub, TokPure, TokReq, TokLayout, TokSoa, TokAs, TokTry, TokCatch, TokThrow,
+    TokTrue, TokFalse, TokNull, TokMut, TokWhen, TokAsKeyword,
     TokRegion, TokComptime, TokSpawn, TokSizeof,
     
     // Types
-    TypeInt, TypeFloat, TypeBool, KindString, TypeVoid
+    TypeInt, TypeFloat, TypeBool, TypeString, TypeVoid
 }
 
 pub struct Token {

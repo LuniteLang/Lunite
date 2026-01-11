@@ -1,0 +1,31 @@
+import "std/string.lun" as str
+import "std/lexer.lun" as lex
+import "std/token.lun" as tok
+import "std/parser.lun" as par
+import "std/ast.lun" as ast
+import "std/semantic.lun" as sem
+import "std/list.lun" as list
+
+fn main() {
+    print("Testing Self-Hosted Semantic Analyzer");
+    let source = "fn add(a: int, b: int) -> int { let sum = a + b; return sum; }";
+    print("Source: ");
+    print(source);
+    
+    let l = lex.create(source);
+    let p = par.Parser::new(l);
+    let program = p.parse_program();
+    
+    print("AST built. Running semantic analysis...");
+    let analyzer = sem.SemanticAnalyzer::new();
+    let typed_items = analyzer.analyze_program(program);
+    
+    print("Semantic analysis complete!");
+    print("Typed items found: ");
+    print(str.int_to_string(typed_items.len()));
+    
+    let item1 = typed_items.get(0);
+    print("Item 1 analyzed");
+    
+    print("Semantic Analyzer test complete!");
+}

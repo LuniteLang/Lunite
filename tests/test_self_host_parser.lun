@@ -1,0 +1,45 @@
+import "std/string.lun" as str
+import "std/lexer.lun" as lex
+import "std/token.lun" as tok
+import "std/parser.lun" as par
+import "std/ast.lun" as ast
+import "std/list.lun" as list
+
+fn main() {
+    print("Testing Self-Hosted Parser");
+    let source = "import \"io.lun\" as io; fn add(a: int, b: int) -> int { return a + b; }";
+    print("Source: ");
+    print(source);
+    
+    let l = lex.create(source);
+    let p = par.Parser::new(l);
+    
+    print("Parsing program...");
+    let program = p.parse_program();
+    
+    let itemCount = program.items.len();
+    print("Items found: ");
+    print(str.int_to_string(itemCount));
+    
+    if (itemCount == 2) {
+        print("SUCCESS: Found exactly 2 items (Import and Function)");
+    } else {
+        print("FAILURE: Expected 2 items");
+    }
+    
+    // Check first item
+    let item1 = program.items.get(0);
+    print("Item 1 found");
+    
+    // Check second item
+    let item2 = program.items.get(1);
+    when (item2) {
+        ast.Item::Function(decl) => {
+            print("Item 2 is Function: ");
+            print(decl.name);
+        },
+        else => { print("Item 2 is not a function in this test version"); }
+    }
+    
+    print("Parser test complete!");
+}

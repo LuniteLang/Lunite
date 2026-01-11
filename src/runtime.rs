@@ -1,11 +1,6 @@
-use std::collections::HashSet;
 use std::fs;
-use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::ptr;
-use std::sync::{mpsc, Mutex, Once};
-use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[repr(C)]
 pub struct LuniteString {
@@ -184,12 +179,22 @@ pub extern "C" fn lunite_realloc(p: *mut u8, os: i64, ns: i64) -> *mut u8 {
     if p.is_null() {
         return lunite_alloc(ns as usize, ptr::null_mut(), ptr::null_mut());
     }
-    let np = lunite_alloc(ns as usize, ptr::null_mut(), ptr::null_mut());
+
     unsafe {
-        ptr::copy_nonoverlapping(p, np, std::cmp::min(os as usize, ns as usize));
+        let old_size = os as usize;
+        let new_size = ns as usize;
+        let old_layout = std::alloc::Layout::from_size_align(old_size + 16, 16).unwrap();
+        let base_ptr = p.sub(16);
+        let new_base_ptr = std::alloc::realloc(base_ptr, old_layout, new_size + 16);
+
+        if new_base_ptr.is_null() {
+            return ptr::null_mut();
+        }
+
+        *(new_base_ptr as *mut usize) = new_size;
+        // Ref count remains the same in the header
+        new_base_ptr.add(16)
     }
-    lunite_release(p);
-    np
 }
 #[no_mangle]
 pub extern "C" fn lunite_arena_save() -> i64 {
@@ -264,7 +269,7 @@ pub extern "C" fn lunite_math_floor(n: f64) -> f64 {
     n.floor()
 }
 #[no_mangle]
-pub extern "C" fn lunite_net_bind(port: i64) -> LuniteResult {
+pub extern "C" fn lunite_net_bind(_port: i64) -> LuniteResult {
     LuniteResult { tag: 1, payload: 0 }
 }
 #[no_mangle]
@@ -330,7 +335,7 @@ pub extern "C" fn lunite_io_read_file_str(path_ptr: *mut LuniteString) -> *mut L
     unsafe {
         let path_str = std::str::from_utf8_unchecked(std::slice::from_raw_parts(
             (*path_ptr).ptr,
-            (*path_ptr).len as usize,
+            (*path_ptr).len,
         ));
         println!("Path: {}", path_str);
         match std::fs::read_to_string(path_str) {

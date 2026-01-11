@@ -113,13 +113,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_program(&mut self) -> Result<Program, CompileError> {
         let mut items = Vec::new();
-        while !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
-            if self.cur_is(&TokenKind::EOF) {
+            if self.cur_is(&TokenKind::Eof) {
                 break;
             }
             items.push(self.parse_item()?);
-            if self.cur_is(&TokenKind::EOF) {
+            if self.cur_is(&TokenKind::Eof) {
                 break;
             }
             self.next_token(); // move past the item
@@ -225,7 +225,7 @@ impl<'a> Parser<'a> {
         self.next_token(); // {
 
         let mut variants = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::RBrace) {
                 break;
@@ -349,7 +349,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token();
         let mut fields = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::RBrace) {
                 break;
@@ -414,7 +414,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token();
         let mut methods = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::RBrace) {
                 break;
@@ -526,7 +526,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token(); // {
         let mut stmts = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::RBrace) {
                 break;
@@ -555,6 +555,10 @@ impl<'a> Parser<'a> {
         if self.cur_is(&TokenKind::TokWhile) {
             return self.parse_while_statement();
         }
+        if self.cur_is(&TokenKind::TokBreak) {
+            self.next_token();
+            return Ok(Statement::Break);
+        }
         if self.cur_is(&TokenKind::TokTry) {
             return self.parse_try_catch_statement();
         }
@@ -564,7 +568,25 @@ impl<'a> Parser<'a> {
         if self.cur_is(&TokenKind::TokWhen) {
             return self.parse_when_statement();
         }
+        if self.cur_is(&TokenKind::TokRegion) {
+            return self.parse_region_statement();
+        }
+        if self.cur_is(&TokenKind::TokSpawn) {
+            return self.parse_spawn_statement();
+        }
         self.parse_expression_statement()
+    }
+
+    fn parse_spawn_statement(&mut self) -> Result<Statement, CompileError> {
+        self.next_token(); // spawn
+        let expr = self.parse_expression(Precedence::Lowest)?;
+        Ok(Statement::Spawn(expr))
+    }
+
+    fn parse_region_statement(&mut self) -> Result<Statement, CompileError> {
+        self.next_token(); // region
+        let body = self.parse_block()?;
+        Ok(Statement::Region { body })
     }
 
     fn parse_when_statement(&mut self) -> Result<Statement, CompileError> {
@@ -585,7 +607,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token(); // {
         let mut arms = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::EOF) {
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::RBrace) {
                 break;
@@ -634,10 +656,26 @@ impl<'a> Parser<'a> {
                     current_name.push('.');
                     current_name.push_str(&member);
                 }
-                if self.peek_is(&TokenKind::ColonColon) {
+                if self.peek_is(&TokenKind::Less) {
+                    self.next_token();
+                    self.next_token();
+                    let mut depth = 1;
+                    while depth > 0 && !self.cur_is(&TokenKind::Eof) {
+                        if self.cur_is(&TokenKind::Less) {
+                            depth += 1;
+                        } else if self.cur_is(&TokenKind::Greater) {
+                            depth -= 1;
+                        }
+                        self.next_token();
+                    }
+                }
+
+                if self.cur_is(&TokenKind::ColonColon) || self.peek_is(&TokenKind::ColonColon) {
+                    if self.peek_is(&TokenKind::ColonColon) {
+                        self.next_token();
+                    }
                     let enum_name = current_name;
-                    self.next_token();
-                    self.next_token();
+                    self.next_token(); // consume '::'
                     let variant_name = self.expect_identifier_string()?;
                     let mut binding = None;
                     if self.peek_is(&TokenKind::LParen) {
@@ -816,15 +854,12 @@ impl<'a> Parser<'a> {
                 if self.peek_is(&TokenKind::Less) {
                     let mut checkpoint = self.clone();
                     checkpoint.next_token(); // Move to '<'
-                    match checkpoint.parse_type_arguments() {
-                        Ok(args) => {
-                            checkpoint.next_token(); // Move to '>'
-                            if checkpoint.cur_is(&TokenKind::Greater) {
-                                *self = checkpoint;
-                                return Ok(Type::Custom(n, args));
-                            }
+                    if let Ok(args) = checkpoint.parse_type_arguments() {
+                        checkpoint.next_token(); // Move to '>'
+                        if checkpoint.cur_is(&TokenKind::Greater) {
+                            *self = checkpoint;
+                            return Ok(Type::Custom(n, args));
                         }
-                        Err(_) => {}
                     }
                 }
                 Ok(Type::Custom(n, vec![]))
@@ -861,7 +896,7 @@ impl<'a> Parser<'a> {
         let mut left = self.parse_prefix()?;
         while !self.peek_is(&TokenKind::Newline)
             && !self.peek_is(&TokenKind::Semicolon)
-            && !self.peek_is(&TokenKind::EOF)
+            && !self.peek_is(&TokenKind::Eof)
             && prec < precedence_of(&self.peek_token.kind)
         {
             self.next_token();
@@ -879,7 +914,7 @@ impl<'a> Parser<'a> {
             TokenKind::TokFalse => Ok(Expression::Boolean(false)),
             TokenKind::TokNull => Ok(Expression::Null),
             TokenKind::Identifier(_) => self.parse_identifier(),
-            TokenKind::Minus | TokenKind::Bang => {
+            TokenKind::Minus | TokenKind::Bang | TokenKind::Ampersand | TokenKind::Star => {
                 let op = self.current_token.kind.clone();
                 self.next_token();
                 Ok(Expression::Unary {
@@ -926,18 +961,15 @@ impl<'a> Parser<'a> {
         if self.peek_is(&TokenKind::Less) {
             let mut checkpoint = self.clone();
             checkpoint.next_token(); // Move to '<'
-            match checkpoint.parse_type_arguments() {
-                Ok(args) => {
-                    checkpoint.next_token(); // Move to '>'
-                    if checkpoint.cur_is(&TokenKind::Greater) {
-                        *self = checkpoint;
-                        expr = Expression::GenericSpecialization {
-                            expression: Box::new(expr),
-                            type_args: args,
-                        };
-                    }
+            if let Ok(args) = checkpoint.parse_type_arguments() {
+                checkpoint.next_token(); // Move to '>'
+                if checkpoint.cur_is(&TokenKind::Greater) {
+                    *self = checkpoint;
+                    expr = Expression::GenericSpecialization {
+                        expression: Box::new(expr),
+                        type_args: args,
+                    };
                 }
-                Err(_) => {}
             }
         }
 
@@ -956,18 +988,15 @@ impl<'a> Parser<'a> {
                 if self.peek_is(&TokenKind::Less) {
                     let mut checkpoint = self.clone();
                     checkpoint.next_token(); // Move to '<'
-                    match checkpoint.parse_type_arguments() {
-                        Ok(args) => {
-                            checkpoint.next_token(); // Move to '>'
-                            if checkpoint.cur_is(&TokenKind::Greater) {
-                                *self = checkpoint;
-                                expr = Expression::GenericSpecialization {
-                                    expression: Box::new(expr),
-                                    type_args: args,
-                                };
-                            }
+                    if let Ok(args) = checkpoint.parse_type_arguments() {
+                        checkpoint.next_token(); // Move to '>'
+                        if checkpoint.cur_is(&TokenKind::Greater) {
+                            *self = checkpoint;
+                            expr = Expression::GenericSpecialization {
+                                expression: Box::new(expr),
+                                type_args: args,
+                            };
                         }
-                        Err(_) => {}
                     }
                 }
                 continue;
@@ -1103,7 +1132,7 @@ impl<'a> Parser<'a> {
                     type_args: vec![],
                 })
             }
-            TokenKind::Dot => {
+            TokenKind::Dot | TokenKind::ColonColon => {
                 self.next_token();
                 let f = self.expect_identifier_string()?;
                 Ok(Expression::MemberAccess {

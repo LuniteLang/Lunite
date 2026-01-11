@@ -17,8 +17,8 @@ fn main() {
         count = count + 1;
         
         when (t.kind) {
-            tok.TokenKind::EOF => {
-                print("Found EOF");
+            tok.TokenKind::Eof => {
+                print("Found Eof");
                 running = false;
             },
             tok.TokenKind::TokFn => {

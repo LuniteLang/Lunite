@@ -141,6 +141,7 @@ pub enum TStatement {
         catch_variable: String,
         catch_block: TBlock,
     },
+    Break,
     When {
         subject: TExpression,
         arms: Vec<TWhenArm>,
@@ -598,12 +599,11 @@ impl SemanticAnalyzer {
                 self.substitute_expression(condition, mapping)?;
                 self.substitute_block(body, mapping)?;
             }
-            Statement::Return(opt) => {
-                if let Some(e) = opt {
-                    self.substitute_expression(e, mapping)?;
-                }
+            Statement::Return(Some(e)) => {
+                self.substitute_expression(e, mapping)?;
             }
             Statement::Block(b) => self.substitute_block(b, mapping)?,
+            Statement::Region { body } => self.substitute_block(body, mapping)?,
             Statement::When { subject, arms } => {
                 self.substitute_expression(subject, mapping)?;
                 for arm in arms {
@@ -710,13 +710,13 @@ impl SemanticAnalyzer {
                             return Type::Custom(mangled, args);
                         }
                     }
-                    return Type::Custom(mangled, args);
+                    Type::Custom(mangled, args)
                 } else {
                     let suffix = self.mangle_name("", &args);
 
                     let (origin_mod, origin_struct_name) = if let Some(pos) = name.find('.') {
                         let alias = &name[..pos];
-                        if self.current_imports.get(alias).is_none() {
+                        if !self.current_imports.contains_key(alias) {
                             eprintln!(
                                 "[SEM] PANIC AHEAD: Alias '{}' not found in imports for type '{}'",
                                 alias, name
@@ -736,7 +736,7 @@ impl SemanticAnalyzer {
                     };
 
                     let mangled_base = if name.contains('.') {
-                        let sname = name.split('.').last().unwrap();
+                        let sname = name.split('.').next_back().unwrap();
                         format!("{}_{}", origin_mod, sname)
                     } else {
                         format!("{}_{}", origin_mod, name)
@@ -825,7 +825,7 @@ impl SemanticAnalyzer {
                             );
                         }
                     }
-                    return Type::Custom(concrete_name, vec![]);
+                    Type::Custom(concrete_name, vec![])
                 }
             }
             Type::Array(inner, size) => Type::Array(Box::new(self.mangle_type(*inner)), size),
@@ -927,18 +927,21 @@ impl SemanticAnalyzer {
                     let local_path = abs_path.parent().unwrap().join(&imp_path);
                     if local_path.exists() {
                         found_path = Some(local_path);
+                    } else if Path::new(&imp_path).exists() {
+                        // 2. Check relative to current working directory (e.g. root)
+                        found_path = Some(PathBuf::from(&imp_path));
                     } else {
-                        // 2. Check in 'lib/' directory
+                        // 3. Check in 'lib/' directory
                         let lib_try = PathBuf::from("lib").join(&imp_path);
                         if lib_try.exists() {
                             found_path = Some(lib_try);
                         } else {
-                            // 3. Check in 'std/' directory (thư viện tiêu chuẩn của Lunite)
+                            // 4. Check in 'std/' directory
                             let std_try = PathBuf::from("std").join(&imp_path);
                             if std_try.exists() {
                                 found_path = Some(std_try);
                             } else {
-                                // 4. Check in other library paths provided via CLI
+                                // 5. Check lib_paths
                                 for lib_dir in &self.lib_paths {
                                     let lib_try = lib_dir.join(&imp_path);
                                     if lib_try.exists() {
@@ -952,8 +955,8 @@ impl SemanticAnalyzer {
 
                     if let Some(target_path) = found_path {
                         let target_mod_name = self.analyze_module_recursive(target_path)?;
-                        self.current_imports
-                            .insert(alias.unwrap_or(target_mod_name.clone()), target_mod_name);
+                        let final_alias = alias.unwrap_or(target_mod_name.clone());
+                        self.current_imports.insert(final_alias, target_mod_name);
                     } else {
                         return Err(self.cur_error(&format!("Import not found: {}", imp_path)));
                     }
@@ -967,13 +970,11 @@ impl SemanticAnalyzer {
                 Item::Enum(e) => {
                     let mangled = format!("{}_{}", mod_name, e.name);
                     let mut me = e.clone();
+                    let skip: std::collections::HashSet<String> =
+                        e.generic_params.iter().cloned().collect();
                     for v in &mut me.variants {
                         if let Some(t) = &mut v.typ {
-                            *t = self.mangle_type_in_discovery(
-                                t.clone(),
-                                &mod_name,
-                                &HashSet::new(),
-                            );
+                            *t = self.mangle_type_in_discovery(t.clone(), &mod_name, &skip);
                         }
                     }
                     self.enum_names.insert(mangled.clone());
@@ -1192,7 +1193,7 @@ impl SemanticAnalyzer {
         }
 
         self.process_instantiation_queue()?;
-        t_items.extend(self.pending_items.drain(..));
+        t_items.append(&mut self.pending_items);
 
         let mut final_structs = HashMap::new();
         let mut final_enums = HashMap::new();
@@ -1685,11 +1686,30 @@ impl SemanticAnalyzer {
                                     tag = pos as u32;
                                     if let Some(b_name) = &binding {
                                         if let Some(v_type) = &ed.variants[pos].typ {
+                                            let mut resolved_type = v_type.clone();
+                                            let mut mapping = std::collections::HashMap::new();
+                                            if let Type::Custom(_, type_args)
+                                            | Type::Enum(_, type_args) = &t_subj.typ
+                                            {
+                                                for (i, param) in
+                                                    ed.generic_params.iter().enumerate()
+                                                {
+                                                    if i < type_args.len() {
+                                                        mapping.insert(
+                                                            param.clone(),
+                                                            type_args[i].clone(),
+                                                        );
+                                                    }
+                                                }
+                                                resolved_type =
+                                                    self.substitute_type(v_type, &mapping);
+                                            }
+
                                             self.current_scope.borrow_mut().insert(
                                                 b_name.clone(),
                                                 Symbol {
                                                     name: b_name.clone(),
-                                                    typ: v_type.clone(),
+                                                    typ: resolved_type,
                                                     is_mutable: false,
                                                     visibility: Visibility::Private,
                                                 },
@@ -1720,7 +1740,12 @@ impl SemanticAnalyzer {
                     arms: t_arms,
                 })
             }
-            _ => Ok(TStatement::Block(TBlock { statements: vec![] })),
+            Statement::Region { body } => Ok(TStatement::Region {
+                body: self.analyze_block(body)?,
+            }),
+            Statement::Break => Ok(TStatement::Break),
+            Statement::Block(body) => Ok(TStatement::Block(self.analyze_block(body)?)),
+            _ => Err(self.cur_error(&format!("Unhandled statement: {:?}", stmt))),
         }
     }
 
@@ -1793,10 +1818,63 @@ impl SemanticAnalyzer {
                                     for t in &extracted_targs {
                                         mangled_args.push(self.mangle_type(t.clone()));
                                     }
-                                    let instantiated =
-                                        self.instantiate_struct(&base_name, &mangled_args)?;
-                                    self.process_instantiation_queue()?;
-                                    instantiated
+
+                                    // Check if it's an Enum
+                                    if let Type::Enum(_, _) = &sym.typ {
+                                        let suffix = self.mangle_name("", &mangled_args);
+                                        let mangled_enum_name = format!("{}_{}", base_name, suffix);
+                                        // Instantiate Enum Manually if not exists
+                                        if !self.enum_decls_global.contains_key(&mangled_enum_name)
+                                        {
+                                            // Find generic key
+                                            // Hack: Look for base_name in enum_decls_global assuming it stores generic decl?
+                                            // Or search enum_decls_global keys ending with base_name?
+                                            // Since we don't have generic_enums map, we try to use base_name.
+                                            // But base_name is fully qualified e.g. std_ast_Option.
+                                            // Note: This requires the generic decl to be registered already.
+
+                                            let mut found_decl = None;
+                                            if let Some(decl) =
+                                                self.enum_decls_global.get(&base_name)
+                                            {
+                                                found_decl = Some(decl.clone());
+                                            }
+
+                                            if let Some(mut decl) = found_decl {
+                                                decl.name = mangled_enum_name.clone();
+                                                let mut mapping = HashMap::new();
+                                                for (i, param) in
+                                                    decl.generic_params.iter().enumerate()
+                                                {
+                                                    if i < mangled_args.len() {
+                                                        mapping.insert(
+                                                            param.clone(),
+                                                            mangled_args[i].clone(),
+                                                        );
+                                                    }
+                                                }
+                                                decl.generic_params.clear();
+                                                for variant in &mut decl.variants {
+                                                    if let Some(t) = &variant.typ {
+                                                        variant.typ =
+                                                            Some(self.substitute_type(t, &mapping));
+                                                        variant.typ = Some(self.mangle_type(
+                                                            variant.typ.clone().unwrap(),
+                                                        ));
+                                                    }
+                                                }
+                                                self.enum_decls_global
+                                                    .insert(mangled_enum_name.clone(), decl);
+                                                self.enum_names.insert(mangled_enum_name.clone());
+                                            }
+                                        }
+                                        mangled_enum_name
+                                    } else {
+                                        let instantiated =
+                                            self.instantiate_struct(&base_name, &mangled_args)?;
+                                        self.process_instantiation_queue()?;
+                                        instantiated
+                                    }
                                 } else {
                                     base_name
                                 };
@@ -1998,23 +2076,86 @@ impl SemanticAnalyzer {
             } => {
                 let tl = self.analyze_expression(*left)?;
                 let tr = self.analyze_expression(*right)?;
+
+                // Type Check
+                // Type Check
+                // Allow comparisons between Pointer and Void (for null checks)
+                let is_ptr_void_cmp = match (&tl.typ, &tr.typ) {
+                    (
+                        Type::Pointer(_)
+                        | Type::Custom(_, _)
+                        | Type::String
+                        | Type::Array(_, _)
+                        | Type::Enum(_, _),
+                        Type::Void,
+                    ) => true,
+                    (
+                        Type::Void,
+                        Type::Pointer(_)
+                        | Type::Custom(_, _)
+                        | Type::String
+                        | Type::Array(_, _)
+                        | Type::Enum(_, _),
+                    ) => true,
+                    _ => false,
+                };
+
+                if tl.typ != tr.typ && !is_ptr_void_cmp {
+                    return Err(self.cur_error(&format!(
+                        "Binary operator type mismatch: {:?} and {:?}",
+                        tl.typ, tr.typ
+                    )));
+                }
+
+                if is_ptr_void_cmp {
+                    match operator {
+                        TokenKind::EqualEqual | TokenKind::BangEqual => {}
+                        _ => {
+                            return Err(
+                                self.cur_error("Invalid operator for pointer/void comparison")
+                            )
+                        }
+                    }
+                }
+
+                let ret_typ = match operator {
+                    TokenKind::EqualEqual
+                    | TokenKind::BangEqual
+                    | TokenKind::Less
+                    | TokenKind::LessEqual
+                    | TokenKind::Greater
+                    | TokenKind::GreaterEqual => Type::Bool,
+                    _ => tl.typ.clone(),
+                };
+
                 Ok(TExpression {
                     kind: TExpressionKind::Binary {
-                        left: Box::new(tl.clone()),
+                        left: Box::new(tl),
                         operator,
                         right: Box::new(tr),
                     },
-                    typ: tl.typ,
+                    typ: ret_typ,
                 })
             }
             Expression::Unary { operator, right } => {
                 let tr = self.analyze_expression(*right)?;
+                let ret_typ = match operator {
+                    TokenKind::Ampersand => Type::Pointer(Box::new(tr.typ.clone())),
+                    TokenKind::Star => {
+                        if let Type::Pointer(inner) = tr.typ.clone() {
+                            *inner
+                        } else {
+                            return Err(self.cur_error("Cannot dereference non-pointer type"));
+                        }
+                    }
+                    _ => tr.typ.clone(),
+                };
                 Ok(TExpression {
                     kind: TExpressionKind::Unary {
                         operator,
                         right: Box::new(tr.clone()),
                     },
-                    typ: tr.typ,
+                    typ: ret_typ,
                 })
             }
             Expression::MemberAccess { object, field } => {
@@ -2029,10 +2170,16 @@ impl SemanticAnalyzer {
                 };
                 if let Expression::Identifier(alias) = inner_obj.clone() {
                     if let Some(real_mod) = self.current_imports.get(&alias).cloned() {
-                        let target_mod = self
-                            .analyzed_modules
-                            .get(&real_mod)
-                            .ok_or_else(|| self.cur_error("Module not analyzed"))?;
+                        // eprintln!("[SEM] Found alias '{}' -> '{}'", alias, real_mod);
+                        // eprintln!("[SEM] Available modules: {:?}", self.analyzed_modules.keys());
+                        let target_mod = if let Some(m) = self.analyzed_modules.get(&real_mod) {
+                            m
+                        } else {
+                            // Try without std_ prefix if it fails?
+                            self.analyzed_modules
+                                .get(&real_mod.trim_start_matches("std_").to_string())
+                                .ok_or_else(|| self.cur_error("Module not analyzed"))?
+                        };
                         if let Some(sym) = target_mod.exports.get(&field) {
                             return Ok(TExpression {
                                 kind: TExpressionKind::Identifier(sym.name.clone()),
@@ -2079,7 +2226,14 @@ impl SemanticAnalyzer {
                 // Static method access is handled in Call expression
 
                 let tobj = self.analyze_expression(*object)?;
-                match &tobj.typ {
+                let mut current_typ = &tobj.typ;
+
+                // Automatic dereferencing for pointers
+                if let Type::Pointer(inner) = current_typ {
+                    current_typ = inner;
+                }
+
+                match current_typ {
                     Type::String if field == "len" => Ok(TExpression {
                         kind: TExpressionKind::MemberAccess {
                             object: Box::new(tobj),
@@ -2087,18 +2241,26 @@ impl SemanticAnalyzer {
                         },
                         typ: Type::Int,
                     }),
-                    Type::Custom(sn, _) => {
+                    Type::Custom(sn, type_args) => {
                         if let Some((s, _)) = self.structs.get(sn) {
                             if let Some(f) = s.fields.iter().find(|(n, _, _)| n == &field) {
+                                let mut mapping = std::collections::HashMap::new();
+                                for (i, param) in s.generic_params.iter().enumerate() {
+                                    if i < type_args.len() {
+                                        mapping.insert(param.clone(), type_args[i].clone());
+                                    }
+                                }
+                                let typ = self.substitute_type(&f.1, &mapping);
                                 return Ok(TExpression {
                                     kind: TExpressionKind::MemberAccess {
                                         object: Box::new(tobj),
                                         field,
                                     },
-                                    typ: f.1.clone(),
+                                    typ,
                                 });
                             }
                         }
+                        eprintln!("[SEM] Field '{}' not found in struct '{}'", field, sn);
                         Err(self.cur_error("Field not found"))
                     }
                     _ => {

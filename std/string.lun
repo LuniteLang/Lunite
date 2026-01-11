@@ -28,3 +28,8 @@ pub fn sub(s: string, start: int, end: int) -> string {
 pub fn print(s: string) {
     lunite_print(s);
 }
+
+pub fn println(s: string) {
+    print(s);
+    print("\n");
+}

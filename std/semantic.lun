@@ -1,40 +1,419 @@
-import "ast.lun" as ast
-import "map.lun" as map
 import "list.lun" as list
+import "map.lun" as map
+import "ast.lun" as ast
+import "token.lun" as tok
+import "string.lun" as str
+
+extern fn lunite_alloc(size: int, metadata: *void, name: *char) -> *void;
+extern fn lunite_retain(p: *void);
 
 pub struct Symbol {
     pub name: string,
-    pub kind: string // "function", "struct", "enum"
+    pub typ: ast.Type,
+    pub is_mutable: bool,
+    pub visibility: ast.Visibility
 }
 
-pub struct Analyzer {
-    pub symbols: map.Map<string, Symbol>
+pub struct Scope {
+    pub symbols: map.Map<string, Symbol>,
+    pub parent_index: int
 }
 
-impl Analyzer {
-    pub fn new() -> Analyzer {
-        return Analyzer {
-            symbols: map.Map<string, Symbol>.new()
+impl Scope {
+    pub fn new(parent_index: int) -> Scope {
+        return Scope {
+            symbols: map.Map<string, Symbol>.new(),
+            parent_index: parent_index
         };
     }
 
-    pub fn analyze(self: Analyzer, prog: ast.Program) {
-        let items = prog.items;
-        let i = 0;
-        while (items.len() > i) {
-            let item = items.get(i);
-            when (item) {
-                ast.Item::Function(f) => {
-                    self.symbols.put(f.name, Symbol { name: f.name, kind: "function" });
-                },
-                ast.Item::Struct(s) => {
-                    self.symbols.put(s.name, Symbol { name: s.name, kind: "struct" });
-                },
-                ast.Item::Enum(e) => {
-                    self.symbols.put(e.name, Symbol { name: e.name, kind: "enum" });
-                }
+    pub fn insert(self: Scope, name: string, sym: Symbol) {
+        self.symbols.put(name, sym);
+    }
+}
+
+
+
+pub enum TItem {
+    Function(TFunctionDecl),
+    NativeFunction(TNativeFunctionDecl),
+    ExternFunction(TExternFunctionDecl),
+    Struct(ast.StructDecl),
+    Enum(ast.EnumDecl)
+}
+
+pub struct TFunctionDecl {
+    pub name: string,
+    pub params: list.List<ast.Param>,
+    pub return_type: ast.Type,
+    pub body: TBlock,
+    pub visibility: ast.Visibility,
+    pub is_pure: bool
+}
+
+pub struct TNativeFunctionDecl {
+    pub name: string,
+    pub params: list.List<ast.Param>,
+    pub return_type: ast.Type,
+    pub visibility: ast.Visibility
+}
+
+pub struct TExternFunctionDecl {
+    pub name: string,
+    pub params: list.List<ast.Param>,
+    pub return_type: ast.Type
+}
+
+pub struct TBlock {
+    pub statements: list.List<TStatement>
+}
+
+pub enum TStatement {
+    Let(TLetStatementPayload),
+    Return(ast.Option<TExpression>),
+    Expr(TExpression),
+    // TODO: if, while, etc.
+    Null
+}
+
+pub struct TLetStatementPayload {
+    pub name: string,
+    pub var_type: ast.Type,
+    pub value: ast.Option<TExpression>
+}
+
+pub struct TExpression {
+    pub kind: TExpressionKind,
+    pub typ: ast.Type
+}
+
+pub enum TExpressionKind {
+    Int(int),
+    Float(float),
+    String(string),
+    Identifier(string),
+    Boolean(bool),
+    Binary(TBinaryExpressionPayload),
+    Call(TCallExpressionPayload),
+    Null
+}
+
+pub struct TBinaryExpressionPayload {
+    pub left: TExpression,
+    pub operator: tok.TokenKind,
+    pub right: TExpression
+}
+
+pub struct TCallExpressionPayload {
+    pub function: string,
+    pub args: list.List<TExpression>
+}
+
+pub struct SemanticAnalyzer {
+    pub scopes: list.List<Scope>,
+    pub current_scope_index: int,
+    pub errors: list.List<string>,
+    pub imports: map.Map<string, string>
+}
+
+// No longer need alloc_expression and alloc_symbol
+
+impl SemanticAnalyzer {
+    pub fn new() -> SemanticAnalyzer {
+        let global_scope = Scope::new(-1);
+        let scopes = list.List<Scope>.new();
+        scopes.push(global_scope);
+        
+        return SemanticAnalyzer {
+            scopes: scopes,
+            current_scope_index: 0,
+            errors: list.List<string>.new(),
+            imports: map.Map<string, string>.new()
+        };
+    }
+
+    pub fn push_scope(self: SemanticAnalyzer) {
+        let new_scope = Scope::new(self.current_scope_index);
+        self.scopes.push(new_scope);
+        self.current_scope_index = self.scopes.len() - 1;
+    }
+
+    pub fn pop_scope(self: SemanticAnalyzer) {
+        if (self.current_scope_index >= 0) {
+            let s = self.scopes.get(self.current_scope_index);
+            self.current_scope_index = s.parent_index;
+        }
+    }
+    
+    pub fn lookup_symbol(self: SemanticAnalyzer, name: string) -> ast.Option<Symbol> {
+        let idx = self.current_scope_index;
+        while (idx >= 0) {
+            let s = self.scopes.get(idx);
+            let sym = s.symbols.get(name);
+            if (sym != null) {
+                return ast.Option<Symbol>::Some(sym);
             }
+            idx = s.parent_index;
+        }
+        return ast.Option<Symbol>::None;
+    }
+
+    pub fn analyze_program(self: SemanticAnalyzer, prog: ast.Program) -> list.List<TItem> {
+        let items = list.List<TItem>.new();
+        let i = 0;
+        while (prog.items.len() > i) {
+            items.push(self.analyze_item(prog.items.get(i)));
             i = i + 1;
+        }
+        return items;
+    }
+
+    pub fn analyze_item(self: SemanticAnalyzer, item: ast.Item) -> TItem {
+        when (item) {
+            ast.Item::Function(decl) => {
+                return TItem::Function(self.analyze_function(decl));
+            },
+            ast.Item::Import(decl) => {
+                let alias = decl.alias;
+                let mut final_alias = "";
+                when (alias) {
+                    ast.Option<string>::Some(a) => { final_alias = a; },
+                    else => { final_alias = decl.path; }
+                }
+                // str.print("[SELF-SEM] Importing ");
+                // str.println(final_alias);
+                self.imports.put(final_alias, decl.path);
+                return TItem::Enum(ast.EnumDecl { name: "Import", generic_params: list.List<string>.new(), variants: list.List<ast.EnumVariant>.new(), visibility: ast.Visibility::Private });
+            },
+            else => {
+                str.print("Error: Item type not yet supported in semantic analyzer: ");
+                // We could print more here
+                return TItem::Enum(ast.EnumDecl { name: "Error", generic_params: list.List<string>.new(), variants: list.List<ast.EnumVariant>.new(), visibility: ast.Visibility::Private });
+            }
+        }
+    }
+    pub fn check_binary_op(self: SemanticAnalyzer, left: ast.Type, op: tok.TokenKind, right: ast.Type) -> ast.Type {
+        when (op) {
+            tok.TokenKind::EqualEqual => { return ast.Type::Bool; },
+            tok.TokenKind::BangEqual => { return ast.Type::Bool; },
+            tok.TokenKind::Less => { return ast.Type::Bool; },
+            tok.TokenKind::Greater => { return ast.Type::Bool; },
+            tok.TokenKind::LessEqual => { return ast.Type::Bool; },
+            tok.TokenKind::GreaterEqual => { return ast.Type::Bool; },
+            else => { return left; }
+        }
+    }
+
+    pub fn analyze_function(self: SemanticAnalyzer, decl: ast.FunctionDecl) -> TFunctionDecl {
+        // Register function in current scope before analyzing body
+        let params_types = list.List<ast.Type>.new();
+        let i = 0;
+        while (decl.params.len() > i) {
+            params_types.push(decl.params.get(i).typ);
+            i = i + 1;
+        }
+
+        let sym_obj = Symbol {
+            name: decl.name,
+            typ: ast.Type::Function(ast.FunctionTypePayload { 
+                params: params_types, 
+                return_type: &decl.return_type 
+            }),
+            is_mutable: false,
+            visibility: decl.visibility
+        };
+        self.scopes.get(self.current_scope_index).insert(decl.name, sym_obj);
+
+        self.push_scope();
+        // Add params to scope
+        let i = 0;
+        while (decl.params.len() > i) {
+            let p = decl.params.get(i);
+            self.scopes.get(self.current_scope_index).insert(p.name, Symbol {
+                name: p.name,
+                typ: p.typ,
+                is_mutable: p.is_mut,
+                visibility: ast.Visibility::Private
+            });
+            i = i + 1;
+        }
+
+        let body = self.analyze_block(decl.body);
+        self.pop_scope();
+
+        return TFunctionDecl {
+            name: decl.name,
+            params: decl.params,
+            return_type: decl.return_type,
+            body: body,
+            visibility: decl.visibility,
+            is_pure: decl.is_pure
+        };
+    }
+
+    pub fn analyze_block(self: SemanticAnalyzer, block: ast.Block) -> TBlock {
+        let stmts = list.List<TStatement>.new();
+        let i = 0;
+        while (block.statements.len() > i) {
+            stmts.push(self.analyze_statement(block.statements.get(i)));
+            i = i + 1;
+        }
+        return TBlock { statements: stmts };
+    }
+
+    pub fn analyze_statement(self: SemanticAnalyzer, stmt: ast.Statement) -> TStatement {
+        when (stmt) {
+            ast.Statement::Let(payload) => {
+                let name = payload.name;
+                let value = payload.value;
+                let type_name = payload.type_name;
+
+                let t_val = ast.Option<TExpression>::None;
+                let var_typ = ast.Type::Void;
+                
+                when (value) {
+                    ast.Option<ast.Expression>::Some(v) => {
+                        let tv = self.analyze_expression(v);
+                        t_val = ast.Option<TExpression>::Some(tv);
+                        var_typ = tv.typ;
+                    },
+                    else => {}
+                }
+                
+                when (type_name) {
+                    ast.Option<ast.Type>::Some(t) => { var_typ = t; },
+                    else => {}
+                }
+                
+                let sym = Symbol {
+                    name: name,
+                    typ: var_typ,
+                    is_mutable: payload.is_mutable,
+                    visibility: ast.Visibility::Private
+                };
+                self.scopes.get(self.current_scope_index).insert(name, sym);
+                
+                return TStatement::Let(TLetStatementPayload {
+                    name: name,
+                    var_type: var_typ,
+                    value: t_val
+                });
+            },
+            ast.Statement::Return(val) => {
+                let t_val = ast.Option<TExpression>::None;
+                when (val) {
+                    ast.Option<ast.Expression>::Some(v) => {
+                        t_val = ast.Option<TExpression>::Some(self.analyze_expression(v));
+                    },
+                    else => {}
+                }
+                return TStatement::Return(t_val);
+            },
+            ast.Statement::Expr(expr) => {
+                return TStatement::Expr(self.analyze_expression(expr));
+            },
+            else => {
+                str.print("Error: Statement block not yet implemented");
+                return TStatement::Null;
+            }
+        }
+    }
+
+    pub fn analyze_expression(self: SemanticAnalyzer, expr: ast.Expression) -> TExpression {
+        when (expr) {
+            ast.Expression::Int(v) => {
+                return TExpression { kind: TExpressionKind::Int(v), typ: ast.Type::Int };
+            },
+            ast.Expression::String(v) => {
+                return TExpression { kind: TExpressionKind::String(v), typ: ast.Type::String };
+            },
+            ast.Expression::Boolean(v) => {
+                return TExpression { kind: TExpressionKind::Boolean(v), typ: ast.Type::Bool };
+            },
+            ast.Expression::Identifier(name) => {
+                let opt = self.lookup_symbol(name);
+                when (opt) {
+                    ast.Option<Symbol>::Some(sym) => {
+                        return TExpression {
+                            kind: TExpressionKind::Identifier(name),
+                            typ: sym.typ
+                        };
+                    },
+                    else => {
+                        // str.print("Error: Undefined variable ");
+                        // str.println(name);
+                        return TExpression { kind: TExpressionKind::Null, typ: ast.Type::Void };
+                    }
+                }
+            },
+            ast.Expression::Binary(payload) => {
+                let tl = self.analyze_expression(*payload.left);
+                let tr = self.analyze_expression(*payload.right);
+                
+                return TExpression {
+                    kind: TExpressionKind::Binary(TBinaryExpressionPayload {
+                        left: tl,
+                        operator: payload.operator,
+                        right: tr
+                    }),
+                    typ: self.check_binary_op(tl.typ, payload.operator, tr.typ)
+                };
+            },
+            ast.Expression::Call(payload) => {
+                let callee = self.analyze_expression(*payload.function);
+                let t_args = list.List<TExpression>.new();
+                let i = 0;
+                while (payload.args.len() > i) {
+                    t_args.push(self.analyze_expression(payload.args.get(i)));
+                    i = i + 1;
+                }
+                
+                let ret_typ = ast.Type::Void;
+                let func_name = "unknown";
+                when (callee.kind) {
+                    TExpressionKind::Identifier(name) => { func_name = name; },
+                    else => {}
+                }
+                
+                when (callee.typ) {
+                    ast.Type::Function(p) => { ret_typ = *p.return_type; },
+                    else => { str.println("Error: Callee is not a function"); }
+                }
+
+                return TExpression {
+                    kind: TExpressionKind::Call(TCallExpressionPayload {
+                        function: func_name,
+                        args: t_args
+                    }),
+                    typ: ret_typ
+                };
+            },
+            ast.Expression::MemberAccess(payload) => {
+                when (*payload.object) {
+                    ast.Expression::Identifier(alias) => {
+                        let real_mod = self.imports.get(alias);
+                        if (real_mod != null) {
+                            if (alias == "str") {
+                                let ret_str = ast.Type::String;
+                                return TExpression {
+                                    kind: TExpressionKind::Identifier("str_" + payload.field),
+                                    typ: ast.Type::Function(ast.FunctionTypePayload {
+                                        params: list.List<ast.Type>.new(),
+                                        return_type: &ret_str
+                                    })
+                                };
+                            }
+                        }
+                    },
+                    else => {}
+                }
+                str.println("Error: MemberAccess not yet fully supported in self-hosted analyzer");
+                return TExpression { kind: TExpressionKind::Null, typ: ast.Type::Void };
+            },
+            else => {
+                str.print("Error: Expression type not yet implemented in analyze_expression");
+                return TExpression { kind: TExpressionKind::Null, typ: ast.Type::Void };
+            }
         }
     }
 }

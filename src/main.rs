@@ -224,7 +224,7 @@ fn ensure_runtime_lib() {
     if !Path::new("libruntime.a").exists() {
         println!("Compiling runtime library...");
         let status = std::process::Command::new("rustc")
-            .args(&[
+            .args([
                 "--crate-type",
                 "staticlib",
                 "--edition",

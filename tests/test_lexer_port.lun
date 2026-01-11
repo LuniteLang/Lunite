@@ -4,7 +4,7 @@ import "std/token.lun" as tok
 
 fn main() {
     print("Testing Self-Hosted Lexer Port...")
-    let content = io.read_file("std/token.lun")
+    let content = io.read_file_text("std/token.lun")
     if (content == "") {
         print("Error: Could not read file")
         return

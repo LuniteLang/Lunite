@@ -67,13 +67,32 @@ impl Lexer {
         else if (ident == "struct") { return tok.TokenKind::TokStruct; }
         else if (ident == "enum") { return tok.TokenKind::TokEnum; }
         else if (ident == "impl") { return tok.TokenKind::TokImpl; }
+        else if (ident == "use") { return tok.TokenKind::TokUse; }
         else if (ident == "import") { return tok.TokenKind::TokImport; }
+        else if (ident == "extern") { return tok.TokenKind::TokExtern; }
+        else if (ident == "native") { return tok.TokenKind::TokNative; }
         else if (ident == "pub") { return tok.TokenKind::TokPub; }
+        else if (ident == "pure") { return tok.TokenKind::TokPure; }
+        else if (ident == "req") { return tok.TokenKind::TokReq; }
+        else if (ident == "layout") { return tok.TokenKind::TokLayout; }
+        else if (ident == "soa") { return tok.TokenKind::TokSoa; }
+        else if (ident == "as") { return tok.TokenKind::TokAs; }
+        else if (ident == "try") { return tok.TokenKind::TokTry; }
+        else if (ident == "catch") { return tok.TokenKind::TokCatch; }
+        else if (ident == "throw") { return tok.TokenKind::TokThrow; }
         else if (ident == "true") { return tok.TokenKind::TokTrue; }
         else if (ident == "false") { return tok.TokenKind::TokFalse; }
+        else if (ident == "null") { return tok.TokenKind::TokNull; }
+        else if (ident == "mut") { return tok.TokenKind::TokMut; }
         else if (ident == "when") { return tok.TokenKind::TokWhen; }
+        else if (ident == "region") { return tok.TokenKind::TokRegion; }
+        else if (ident == "comptime") { return tok.TokenKind::TokComptime; }
+        else if (ident == "spawn") { return tok.TokenKind::TokSpawn; }
+        else if (ident == "sizeof") { return tok.TokenKind::TokSizeof; }
         else if (ident == "int") { return tok.TokenKind::TypeInt; }
-        else if (ident == "string") { return tok.TokenKind::KindString; }
+        else if (ident == "float") { return tok.TokenKind::TypeFloat; }
+        else if (ident == "bool") { return tok.TokenKind::TypeBool; }
+        else if (ident == "string") { return tok.TokenKind::TypeString; }
         else if (ident == "void") { return tok.TokenKind::TypeVoid; }
         
         return tok.TokenKind::Identifier(ident);
@@ -85,7 +104,7 @@ impl Lexer {
         let cur_c = self.col;
         
         if (self.ch == 0) {
-            return tok.Token { kind: tok.TokenKind::EOF, line: cur_l, column: cur_c };
+            return tok.Token { kind: tok.TokenKind::Eof, line: cur_l, column: cur_c };
         }
         
         let c = self.ch;
@@ -93,62 +112,99 @@ impl Lexer {
 
         let kind = tok.TokenKind::Illegal;
 
-        if (c == 43) { kind = tok.TokenKind::TokPlus; }
+        if (c == 43) { kind = tok.TokenKind::Plus; }
         else if (c == 45) {
             if (self.ch == 62) {
                 self.read_char();
-                kind = tok.TokenKind::TokArrow;
+                kind = tok.TokenKind::Arrow;
             } else {
-                kind = tok.TokenKind::TokMinus;
+                kind = tok.TokenKind::Minus;
             }
         }
-        else if (c == 42) { kind = tok.TokenKind::TokStar; }
-        else if (c == 47) { kind = tok.TokenKind::TokSlash; }
+        else if (c == 42) { kind = tok.TokenKind::Star; }
+        else if (c == 47) { kind = tok.TokenKind::Slash; }
+        else if (c == 37) { kind = tok.TokenKind::Percent; }
         else if (c == 61) {
             if (self.ch == 61) {
                 self.read_char();
-                kind = tok.TokenKind::TokEqualEqual;
+                kind = tok.TokenKind::EqualEqual;
             } else if (self.ch == 62) {
                 self.read_char();
-                kind = tok.TokenKind::TokFatArrow;
+                kind = tok.TokenKind::FatArrow;
             } else {
-                kind = tok.TokenKind::TokEqual;
+                kind = tok.TokenKind::Equal;
             }
         }
-        else if (c == 40) { kind = tok.TokenKind::TokLParen; }
-        else if (c == 41) { kind = tok.TokenKind::TokRParen; }
-        else if (c == 123) { kind = tok.TokenKind::TokLBrace; }
-        else if (c == 125) { kind = tok.TokenKind::TokRBrace; }
+        else if (c == 33) {
+            if (self.ch == 61) {
+                self.read_char();
+                kind = tok.TokenKind::BangEqual;
+            } else {
+                kind = tok.TokenKind::Bang;
+            }
+        }
+        else if (c == 40) { kind = tok.TokenKind::LParen; }
+        else if (c == 41) { kind = tok.TokenKind::RParen; }
+        else if (c == 123) { kind = tok.TokenKind::LBrace; }
+        else if (c == 125) { kind = tok.TokenKind::RBrace; }
+        else if (c == 91) { kind = tok.TokenKind::LBracket; }
+        else if (c == 93) { kind = tok.TokenKind::RBracket; }
         else if (c == 58) {
             if (self.ch == 58) {
                 self.read_char();
-                kind = tok.TokenKind::TokColonColon;
+                kind = tok.TokenKind::ColonColon;
             } else {
-                kind = tok.TokenKind::TokColon;
+                kind = tok.TokenKind::Colon;
             }
         }
-        else if (c == 44) { kind = tok.TokenKind::TokComma; }
-        else if (c == 59) { kind = tok.TokenKind::TokSemicolon; }
+        else if (c == 44) { kind = tok.TokenKind::Comma; }
+        else if (c == 46) {
+            if (self.ch == 46) {
+                self.read_char();
+                kind = tok.TokenKind::DotDot;
+            } else {
+                kind = tok.TokenKind::Dot;
+            }
+        }
+        else if (c == 59) { kind = tok.TokenKind::Semicolon; }
+        else if (c == 38) {
+            if (self.ch == 38) {
+                self.read_char();
+                kind = tok.TokenKind::AndAnd;
+            } else {
+                kind = tok.TokenKind::Ampersand;
+            }
+        }
+        else if (c == 124) {
+            if (self.ch == 124) {
+                self.read_char();
+                kind = tok.TokenKind::PipePipe;
+            } else {
+                kind = tok.TokenKind::Pipe;
+            }
+        }
+        else if (c == 94) { kind = tok.TokenKind::Caret; }
+        else if (c == 63) { kind = tok.TokenKind::Question; }
         else if (c == 60) {
             if (self.ch == 60) {
                 self.read_char();
-                kind = tok.TokenKind::TokLessLess;
+                kind = tok.TokenKind::LessLess;
             } else if (self.ch == 61) {
                 self.read_char();
-                kind = tok.TokenKind::TokLessEqual;
+                kind = tok.TokenKind::LessEqual;
             } else {
-                kind = tok.TokenKind::TokLess;
+                kind = tok.TokenKind::Less;
             }
         }
         else if (c == 62) {
             if (self.ch == 62) {
                 self.read_char();
-                kind = tok.TokenKind::TokGreaterGreater;
+                kind = tok.TokenKind::GreaterGreater;
             } else if (self.ch == 61) {
                 self.read_char();
-                kind = tok.TokenKind::TokGreaterEqual;
+                kind = tok.TokenKind::GreaterEqual;
             } else {
-                kind = tok.TokenKind::TokGreater;
+                kind = tok.TokenKind::Greater;
             }
         }
         else if (c == 34) {

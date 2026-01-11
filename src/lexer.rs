@@ -51,25 +51,34 @@ impl<'a> Lexer<'a> {
                 let mut chars_clone = self.chars.clone();
                 let next_char = chars_clone.next().map(|(_, c)| c);
                 if next_char == Some('/') {
-                    self.advance(); self.advance();
+                    self.advance();
+                    self.advance();
                     while let Some(c) = self.peek() {
-                        if c == '\n' { break; }
+                        if c == '\n' {
+                            break;
+                        }
                         self.advance();
                     }
                 } else if next_char == Some('*') {
-                    self.advance(); self.advance();
+                    self.advance();
+                    self.advance();
                     while let Some(c) = self.peek() {
                         if c == '*' {
                             let mut inner_clone = self.chars.clone();
                             if inner_clone.next().map(|(_, c)| c) == Some('/') {
-                                self.advance(); self.advance();
+                                self.advance();
+                                self.advance();
                                 break;
                             }
                         }
                         self.advance();
                     }
-                } else { break; }
-            } else { break; }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
         }
     }
 
@@ -80,81 +89,182 @@ impl<'a> Lexer<'a> {
 
         let kind = match self.peek() {
             Some(c) => match c {
-                '\n' => { self.advance(); TokenKind::Newline }
-                '+' => { self.advance(); TokenKind::Plus }
+                '\n' => {
+                    self.advance();
+                    TokenKind::Newline
+                }
+                '+' => {
+                    self.advance();
+                    TokenKind::Plus
+                }
                 '-' => {
                     self.advance();
-                    if self.peek() == Some('>') { self.advance(); TokenKind::Arrow }
-                    else { TokenKind::Minus }
+                    if self.peek() == Some('>') {
+                        self.advance();
+                        TokenKind::Arrow
+                    } else {
+                        TokenKind::Minus
+                    }
                 }
-                '*' => { self.advance(); TokenKind::Star }
-                '%' => { self.advance(); TokenKind::Percent }
-                '/' => { self.advance(); TokenKind::Slash }
+                '*' => {
+                    self.advance();
+                    TokenKind::Star
+                }
+                '%' => {
+                    self.advance();
+                    TokenKind::Percent
+                }
+                '/' => {
+                    self.advance();
+                    TokenKind::Slash
+                }
                 '=' => {
                     self.advance();
-                    if self.peek() == Some('=') { self.advance(); TokenKind::EqualEqual }
-                    else if self.peek() == Some('>') { self.advance(); TokenKind::FatArrow }
-                    else { TokenKind::Equal }
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        TokenKind::EqualEqual
+                    } else if self.peek() == Some('>') {
+                        self.advance();
+                        TokenKind::FatArrow
+                    } else {
+                        TokenKind::Equal
+                    }
                 }
-                '(' => { self.advance(); TokenKind::LParen }
-                ')' => { self.advance(); TokenKind::RParen }
-                '{' => { self.advance(); TokenKind::LBrace }
-                '}' => { self.advance(); TokenKind::RBrace }
-                '[' => { self.advance(); TokenKind::LBracket }
-                ']' => { self.advance(); TokenKind::RBracket }
+                '(' => {
+                    self.advance();
+                    TokenKind::LParen
+                }
+                ')' => {
+                    self.advance();
+                    TokenKind::RParen
+                }
+                '{' => {
+                    self.advance();
+                    TokenKind::LBrace
+                }
+                '}' => {
+                    self.advance();
+                    TokenKind::RBrace
+                }
+                '[' => {
+                    self.advance();
+                    TokenKind::LBracket
+                }
+                ']' => {
+                    self.advance();
+                    TokenKind::RBracket
+                }
                 ':' => {
                     self.advance();
-                    if self.peek() == Some(':') { self.advance(); TokenKind::ColonColon }
-                    else { TokenKind::Colon }
+                    if self.peek() == Some(':') {
+                        self.advance();
+                        TokenKind::ColonColon
+                    } else {
+                        TokenKind::Colon
+                    }
                 }
-                ';' => { self.advance(); TokenKind::Semicolon }
-                ',' => { self.advance(); TokenKind::Comma }
-                '.' => { self.advance(); TokenKind::Dot }
+                ';' => {
+                    self.advance();
+                    TokenKind::Semicolon
+                }
+                ',' => {
+                    self.advance();
+                    TokenKind::Comma
+                }
+                '.' => {
+                    self.advance();
+                    if self.peek() == Some('.') {
+                        self.advance();
+                        TokenKind::DotDot
+                    } else {
+                        TokenKind::Dot
+                    }
+                }
                 '!' => {
                     self.advance();
-                    if self.peek() == Some('=') { self.advance(); TokenKind::BangEqual }
-                    else { TokenKind::Bang }
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        TokenKind::BangEqual
+                    } else {
+                        TokenKind::Bang
+                    }
                 }
                 '&' => {
                     self.advance();
-                    if self.peek() == Some('&') { self.advance(); TokenKind::AndAnd }
-                    else { TokenKind::Ampersand }
+                    if self.peek() == Some('&') {
+                        self.advance();
+                        TokenKind::AndAnd
+                    } else {
+                        TokenKind::Ampersand
+                    }
                 }
                 '|' => {
                     self.advance();
-                    if self.peek() == Some('|') { self.advance(); TokenKind::PipePipe }
-                    else { TokenKind::Pipe }
+                    if self.peek() == Some('|') {
+                        self.advance();
+                        TokenKind::PipePipe
+                    } else {
+                        TokenKind::Pipe
+                    }
                 }
-                '^' => { self.advance(); TokenKind::Caret }
-                '?' => { self.advance(); TokenKind::Question }
+                '^' => {
+                    self.advance();
+                    TokenKind::Caret
+                }
+                '?' => {
+                    self.advance();
+                    TokenKind::Question
+                }
                 '<' => {
                     self.advance();
-                    if self.peek() == Some('=') { self.advance(); TokenKind::LessEqual }
-                    else if self.peek() == Some('<') { self.advance(); TokenKind::LessLess }
-                    else { TokenKind::Less }
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        TokenKind::LessEqual
+                    } else if self.peek() == Some('<') {
+                        self.advance();
+                        TokenKind::LessLess
+                    } else {
+                        TokenKind::Less
+                    }
                 }
                 '>' => {
                     self.advance();
-                    if self.peek() == Some('=') { self.advance(); TokenKind::GreaterEqual }
-                    else if self.peek() == Some('>') { self.advance(); TokenKind::GreaterGreater }
-                    else { TokenKind::Greater }
+                    if self.peek() == Some('=') {
+                        self.advance();
+                        TokenKind::GreaterEqual
+                    } else if self.peek() == Some('>') {
+                        self.advance();
+                        TokenKind::GreaterGreater
+                    } else {
+                        TokenKind::Greater
+                    }
                 }
                 '"' => self.read_string(),
                 c if c.is_alphabetic() || c == '_' => self.read_identifier(),
                 c if c.is_numeric() => self.read_number(),
-                _ => { self.advance(); TokenKind::Illegal }
+                _ => {
+                    self.advance();
+                    TokenKind::Illegal
+                }
             },
-            None => TokenKind::EOF,
+            None => TokenKind::Eof,
         };
 
-        Token { kind, line: start_line, column: start_col }
+        Token {
+            kind,
+            line: start_line,
+            column: start_col,
+        }
     }
 
     fn read_identifier(&mut self) -> TokenKind {
         let start = self.current_pos;
         while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || c == '_' { self.advance(); }
-            else { break; }
+            if c.is_alphanumeric() || c == '_' {
+                self.advance();
+            } else {
+                break;
+            }
         }
         let text = &self.input[start..self.current_pos];
         match text {
@@ -165,6 +275,7 @@ impl<'a> Lexer<'a> {
             "else" => TokenKind::TokElse,
             "while" => TokenKind::TokWhile,
             "for" => TokenKind::TokFor,
+            "break" => TokenKind::TokBreak,
             "struct" => TokenKind::TokStruct,
             "int" => TokenKind::TypeInt,
             "float" => TokenKind::TypeFloat,
@@ -204,20 +315,30 @@ impl<'a> Lexer<'a> {
         let start = self.current_pos;
         let mut is_float = false;
         while let Some(c) = self.peek() {
-            if c.is_numeric() { self.advance(); }
-            else if c == '.' && !is_float { is_float = true; self.advance(); }
-            else { break; }
+            if c.is_numeric() {
+                self.advance();
+            } else if c == '.' && !is_float {
+                is_float = true;
+                self.advance();
+            } else {
+                break;
+            }
         }
         let text = &self.input[start..self.current_pos];
-        if is_float { TokenKind::FloatLiteral(text.parse().unwrap_or(0.0)) }
-        else { TokenKind::IntLiteral(text.parse().unwrap_or(0)) }
+        if is_float {
+            TokenKind::FloatLiteral(text.parse().unwrap_or(0.0))
+        } else {
+            TokenKind::IntLiteral(text.parse().unwrap_or(0))
+        }
     }
 
     fn read_string(&mut self) -> TokenKind {
         self.advance(); // open quote
         let mut s = String::new();
         while let Some(c) = self.peek() {
-            if c == '"' { break; }
+            if c == '"' {
+                break;
+            }
             if c == '\\' {
                 self.advance();
                 match self.peek() {
@@ -226,10 +347,15 @@ impl<'a> Lexer<'a> {
                     Some('t') => s.push('\t'),
                     Some('"') => s.push('"'),
                     Some('\\') => s.push('\\'),
-                    Some(other) => { s.push('\\'); s.push(other); }
+                    Some(other) => {
+                        s.push('\\');
+                        s.push(other);
+                    }
                     None => break,
                 }
-            } else { s.push(c); }
+            } else {
+                s.push(c);
+            }
             self.advance();
         }
         self.advance(); // close quote

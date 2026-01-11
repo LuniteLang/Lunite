@@ -43,6 +43,7 @@ struct FunctionCompiler<'a, 'ctx> {
     fn_value: FunctionValue<'ctx>,
     variables: HashMap<String, (VarLoc<'ctx>, Type)>,
     scope_stack: Vec<Vec<String>>,
+    loop_exit_stack: Vec<BasicBlock<'ctx>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -118,7 +119,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             None,
         );
 
-        let str_ptr_type = string_type.ptr_type(AddressSpace::default());
+        let str_ptr_type = context.ptr_type(AddressSpace::default());
         module.add_function(
             "print",
             void_type.fn_type(&[str_ptr_type.into()], false),
@@ -381,11 +382,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let et = self
                     .type_to_basic_type(inner)
                     .unwrap_or(self.context.ptr_type(AddressSpace::default()).into());
-                Some(
-                    et.array_type(*size)
-                        .ptr_type(AddressSpace::default())
-                        .into(),
-                )
+                Some(self.context.ptr_type(AddressSpace::default()).into())
             }
             Type::Pointer(_) => Some(self.context.ptr_type(AddressSpace::default()).into()),
             Type::Void => None,
@@ -494,7 +491,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn compile_prototype(
         &self,
         name: &str,
-        params: &Vec<(String, Type, bool)>,
+        params: &[(String, Type, bool)],
         ret: &Type,
     ) -> Result<(), CompileError> {
         if self.extern_functions.contains(name) {
@@ -536,6 +533,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             fn_value: fn_val,
             variables: HashMap::new(),
             scope_stack: vec![Vec::new()],
+            loop_exit_stack: Vec::new(),
         };
         for (i, (name, typ, _)) in f.params.iter().enumerate() {
             let val = fn_val.get_nth_param(i as u32).unwrap();
@@ -913,7 +911,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .builder
                     .build_bit_cast(
                         str_struct,
-                        self.gen.string_type.ptr_type(AddressSpace::default()),
+                        self.gen.context.ptr_type(AddressSpace::default()),
                         "scast",
                     )
                     .unwrap()
@@ -1158,7 +1156,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                                 .build_phi(self.gen.context.bool_type(), "eq")
                                 .unwrap();
                             phi.add_incoming(&[(&both_null, curr_bb), (&tags_eq, load_bb)]);
-                            Ok(phi.as_basic_value().into())
+                            Ok(phi.as_basic_value())
                         } else {
                             let l_val = if lv.is_pointer_value() {
                                 self.gen
@@ -1318,7 +1316,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                                 .build_phi(self.gen.context.bool_type(), "ne")
                                 .unwrap();
                             phi.add_incoming(&[(&one_null, curr_bb), (&tags_ne, load_bb)]);
-                            Ok(phi.as_basic_value().into())
+                            Ok(phi.as_basic_value())
                         } else {
                             let l_val = if lv.is_pointer_value() {
                                 self.gen
@@ -1353,7 +1351,41 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         }
                     }
                     TokenKind::Less => {
-                        if is_f {
+                        if let Type::Enum(name, _) = &left.typ {
+                            let et = *self.gen.enum_types.get(name).expect("Enum type undefined");
+                            let l_ptr = lv.into_pointer_value();
+                            let r_ptr = rv.into_pointer_value();
+                            let l_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, l_ptr, 0, "ltp")
+                                .unwrap();
+                            let l_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), l_tag_ptr, "lt")
+                                .unwrap()
+                                .into_int_value();
+
+                            let r_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, r_ptr, 0, "rtp")
+                                .unwrap();
+                            let r_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), r_tag_ptr, "rt")
+                                .unwrap()
+                                .into_int_value();
+
+                            Ok(self
+                                .gen
+                                .builder
+                                .build_int_compare(IntPredicate::SLT, l_tag, r_tag, "")
+                                .unwrap()
+                                .into())
+                        } else if is_f {
                             Ok(self
                                 .gen
                                 .builder
@@ -1380,7 +1412,41 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         }
                     }
                     TokenKind::Greater => {
-                        if is_f {
+                        if let Type::Enum(name, _) = &left.typ {
+                            let et = *self.gen.enum_types.get(name).expect("Enum type undefined");
+                            let l_ptr = lv.into_pointer_value();
+                            let r_ptr = rv.into_pointer_value();
+                            let l_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, l_ptr, 0, "ltp")
+                                .unwrap();
+                            let l_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), l_tag_ptr, "lt")
+                                .unwrap()
+                                .into_int_value();
+
+                            let r_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, r_ptr, 0, "rtp")
+                                .unwrap();
+                            let r_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), r_tag_ptr, "rt")
+                                .unwrap()
+                                .into_int_value();
+
+                            Ok(self
+                                .gen
+                                .builder
+                                .build_int_compare(IntPredicate::SGT, l_tag, r_tag, "")
+                                .unwrap()
+                                .into())
+                        } else if is_f {
                             Ok(self
                                 .gen
                                 .builder
@@ -1407,7 +1473,41 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         }
                     }
                     TokenKind::LessEqual => {
-                        if is_f {
+                        if let Type::Enum(name, _) = &left.typ {
+                            let et = *self.gen.enum_types.get(name).expect("Enum type undefined");
+                            let l_ptr = lv.into_pointer_value();
+                            let r_ptr = rv.into_pointer_value();
+                            let l_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, l_ptr, 0, "ltp")
+                                .unwrap();
+                            let l_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), l_tag_ptr, "lt")
+                                .unwrap()
+                                .into_int_value();
+
+                            let r_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, r_ptr, 0, "rtp")
+                                .unwrap();
+                            let r_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), r_tag_ptr, "rt")
+                                .unwrap()
+                                .into_int_value();
+
+                            Ok(self
+                                .gen
+                                .builder
+                                .build_int_compare(IntPredicate::SLE, l_tag, r_tag, "")
+                                .unwrap()
+                                .into())
+                        } else if is_f {
                             Ok(self
                                 .gen
                                 .builder
@@ -1434,7 +1534,41 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         }
                     }
                     TokenKind::GreaterEqual => {
-                        if is_f {
+                        if let Type::Enum(name, _) = &left.typ {
+                            let et = *self.gen.enum_types.get(name).expect("Enum type undefined");
+                            let l_ptr = lv.into_pointer_value();
+                            let r_ptr = rv.into_pointer_value();
+                            let l_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, l_ptr, 0, "ltp")
+                                .unwrap();
+                            let l_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), l_tag_ptr, "lt")
+                                .unwrap()
+                                .into_int_value();
+
+                            let r_tag_ptr = self
+                                .gen
+                                .builder
+                                .build_struct_gep(et, r_ptr, 0, "rtp")
+                                .unwrap();
+                            let r_tag = self
+                                .gen
+                                .builder
+                                .build_load(self.gen.context.i64_type(), r_tag_ptr, "rt")
+                                .unwrap()
+                                .into_int_value();
+
+                            Ok(self
+                                .gen
+                                .builder
+                                .build_int_compare(IntPredicate::SGE, l_tag, r_tag, "")
+                                .unwrap()
+                                .into())
+                        } else if is_f {
                             Ok(self
                                 .gen
                                 .builder
@@ -1579,7 +1713,11 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 let cast = self
                     .gen
                     .builder
-                    .build_bit_cast(ptr, et.ptr_type(AddressSpace::default()), "ecast")
+                    .build_bit_cast(
+                        ptr,
+                        self.gen.context.ptr_type(AddressSpace::default()),
+                        "ecast",
+                    )
                     .unwrap()
                     .into_pointer_value();
                 let tag_ptr = self
@@ -1606,7 +1744,11 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     let p_cast = self
                         .gen
                         .builder
-                        .build_bit_cast(p_ptr, v_ty.ptr_type(AddressSpace::default()), "pc")
+                        .build_bit_cast(
+                            p_ptr,
+                            self.gen.context.ptr_type(AddressSpace::default()),
+                            "pc",
+                        )
                         .unwrap()
                         .into_pointer_value();
                     self.gen.builder.build_store(p_cast, val).unwrap();
@@ -1653,7 +1795,11 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 let cast = self
                     .gen
                     .builder
-                    .build_bit_cast(ptr, st.ptr_type(AddressSpace::default()), "cast")
+                    .build_bit_cast(
+                        ptr,
+                        self.gen.context.ptr_type(AddressSpace::default()),
+                        "cast",
+                    )
                     .unwrap()
                     .into_pointer_value();
                 let sd = self.gen.struct_decls.get(name).unwrap();
@@ -1716,6 +1862,42 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     None => self.gen.context.i64_type().const_zero().into(),
                 })
             }
+            TExpressionKind::Unary { operator, right } => match operator {
+                TokenKind::Minus => {
+                    let v = self.compile_expression(right)?;
+                    if matches!(right.typ, Type::Float) {
+                        Ok(self
+                            .gen
+                            .builder
+                            .build_float_neg(v.into_float_value(), "fneg")
+                            .unwrap()
+                            .into())
+                    } else {
+                        Ok(self
+                            .gen
+                            .builder
+                            .build_int_neg(v.into_int_value(), "ineg")
+                            .unwrap()
+                            .into())
+                    }
+                }
+                TokenKind::Bang => {
+                    let v = self.compile_expression(right)?;
+                    Ok(self
+                        .gen
+                        .builder
+                        .build_not(v.into_int_value(), "not")
+                        .unwrap()
+                        .into())
+                }
+                TokenKind::Star => {
+                    let ptr = self.compile_expression(right)?.into_pointer_value();
+                    let bt = self.gen.type_to_basic_type(&expr.typ).unwrap();
+                    Ok(self.gen.builder.build_load(bt, ptr, "deref").unwrap())
+                }
+                TokenKind::Ampersand => Ok(self.compile_lvalue(right)?.into()),
+                _ => unreachable!("Invalid unary operator: {:?}", operator),
+            },
             TExpressionKind::MemberAccess { object, field } => {
                 let op = self.compile_expression(object)?;
                 if matches!(object.typ, Type::String) {
@@ -1735,7 +1917,17 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 }
                 let sn = match &object.typ {
                     Type::Custom(n, _) => n,
-                    _ => unreachable!(),
+                    Type::Pointer(inner) => {
+                        if let Type::Custom(n, _) = &**inner {
+                            n
+                        } else {
+                            unreachable!("Pointer must point to Custom type for member access")
+                        }
+                    }
+                    _ => unreachable!(
+                        "Member object type mismatch in rvalue codegen: {:?}",
+                        object.typ
+                    ),
                 };
                 if !self.gen.struct_types.contains_key(sn) {
                     eprintln!("[CODEGEN] PANIC in compile_expression: Struct type '{}' not found in registry!", sn);
@@ -1811,7 +2003,6 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         .builder
                         .build_bit_cast(payload, self.gen.context.f64_type(), "to_f64")
                         .unwrap()
-                        .into()
                 } else {
                     self.gen
                         .builder
@@ -1862,19 +2053,18 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     Type::Pointer(_) | Type::Custom(_, _) | Type::String
                 ) || matches!(src_type, Type::Array(_, _)))
                     && matches!(dst_type, Type::Int)
+                    && val.is_pointer_value()
                 {
-                    if val.is_pointer_value() {
-                        return Ok(self
-                            .gen
-                            .builder
-                            .build_ptr_to_int(
-                                val.into_pointer_value(),
-                                self.gen.context.i64_type(),
-                                "cast",
-                            )
-                            .unwrap()
-                            .into());
-                    }
+                    return Ok(self
+                        .gen
+                        .builder
+                        .build_ptr_to_int(
+                            val.into_pointer_value(),
+                            self.gen.context.i64_type(),
+                            "cast",
+                        )
+                        .unwrap()
+                        .into());
                 }
                 if matches!(src_type, Type::Int) && matches!(dst_type, Type::Pointer(_)) {
                     let dst_basic = self
@@ -1929,10 +2119,82 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                         .gen
                         .builder
                         .build_bit_cast(val.into_pointer_value(), dst_basic, "cast")
-                        .unwrap()
-                        .into());
+                        .unwrap());
                 }
                 Ok(val)
+            }
+            TExpressionKind::Null => {
+                let bt = self
+                    .gen
+                    .type_to_basic_type(&expr.typ)
+                    .unwrap_or(self.gen.context.i64_type().into());
+                if bt.is_pointer_type() {
+                    Ok(bt.into_pointer_type().const_null().into())
+                } else {
+                    Ok(bt.const_zero())
+                }
+            }
+            TExpressionKind::ArrayLiteral { elements } => {
+                let inner_typ = match &expr.typ {
+                    Type::Array(t, _) => t,
+                    _ => unreachable!(),
+                };
+                let et = self.gen.type_to_basic_type(inner_typ).unwrap();
+                let len = elements.len();
+                let elem_size = et.size_of().unwrap();
+                let total_bytes = self
+                    .gen
+                    .builder
+                    .build_int_mul(
+                        elem_size,
+                        self.gen.context.i64_type().const_int(len as u64, false),
+                        "asize",
+                    )
+                    .unwrap();
+
+                let arr_ptr = self
+                    .gen
+                    .builder
+                    .build_call(
+                        self.gen.module.get_function("lunite_alloc").unwrap(),
+                        &[
+                            total_bytes.into(),
+                            self.gen
+                                .context
+                                .ptr_type(AddressSpace::default())
+                                .const_null()
+                                .into(),
+                            self.gen
+                                .context
+                                .ptr_type(AddressSpace::default())
+                                .const_null()
+                                .into(),
+                        ],
+                        "array",
+                    )
+                    .unwrap()
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+                    .into_pointer_value();
+
+                for (i, el) in elements.iter().enumerate() {
+                    let val = self.compile_expression(el)?;
+                    self.emit_retain(val, inner_typ);
+                    let ep = unsafe {
+                        self.gen
+                            .builder
+                            .build_gep(
+                                et,
+                                arr_ptr,
+                                &[self.gen.context.i64_type().const_int(i as u64, false)],
+                                "ep",
+                            )
+                            .unwrap()
+                    };
+                    self.gen.builder.build_store(ep, val).unwrap();
+                }
+                Ok(arr_ptr.into())
             }
             _ => Ok(self.gen.context.i64_type().const_zero().into()),
         }
@@ -1984,7 +2246,14 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 let obj_ptr = self.compile_expression(object)?.into_pointer_value();
                 let sn = match &object.typ {
                     Type::Custom(n, _) => n,
-                    _ => unreachable!(),
+                    Type::Pointer(inner) => {
+                        if let Type::Custom(n, _) = &**inner {
+                            n
+                        } else {
+                            unreachable!("Pointer must point to Custom type for member access")
+                        }
+                    }
+                    _ => unreachable!("Member object type mismatch in codegen: {:?}", object.typ),
                 };
                 if !self.gen.struct_types.contains_key(sn) {
                     eprintln!(
@@ -2005,7 +2274,14 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .build_struct_gep(*st, obj_ptr, idx as u32, "fp")
                     .unwrap())
             }
-            _ => unreachable!(),
+            TExpressionKind::Unary {
+                operator: TokenKind::Star,
+                right,
+            } => Ok(self.compile_expression(right)?.into_pointer_value()),
+            _ => {
+                eprintln!("[CODEGEN] PANIC: Invalid lvalue: {:?}", &expr.kind);
+                unreachable!()
+            }
         }
     }
 
@@ -2052,6 +2328,18 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
             }
             TStatement::Expr(e) => {
                 self.compile_expression(e)?;
+                Ok(())
+            }
+            TStatement::Break => {
+                if let Some(bb) = self.loop_exit_stack.last() {
+                    self.gen.builder.build_unconditional_branch(*bb).unwrap();
+                } else {
+                    return Err(CompileError {
+                        message: "Break statement outside of loop".into(),
+                        line: 0,
+                        column: 0,
+                    });
+                }
                 Ok(())
             }
             TStatement::Return(oe) => {
@@ -2136,7 +2424,9 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .build_conditional_branch(cond, body_bb, end_bb)
                     .unwrap();
                 self.gen.builder.position_at_end(body_bb);
+                self.loop_exit_stack.push(end_bb);
                 self.compile_block(body)?;
+                self.loop_exit_stack.pop();
                 if self
                     .gen
                     .builder
@@ -2306,7 +2596,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                                     .builder
                                     .build_bit_cast(
                                         p_ptr,
-                                        b_ty.ptr_type(AddressSpace::default()),
+                                        self.gen.context.ptr_type(AddressSpace::default()),
                                         "pcast",
                                     )
                                     .unwrap()

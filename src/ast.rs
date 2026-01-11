@@ -138,6 +138,7 @@ pub enum Statement {
         condition: Expression,
         body: Block,
     },
+    Break,
     Region {
         body: Block,
     },
@@ -249,9 +250,12 @@ pub enum Expression {
 
 impl Expression {
     pub fn is_lvalue(&self) -> bool {
-        matches!(
-            self,
-            Expression::Identifier(_) | Expression::MemberAccess { .. } | Expression::Index { .. }
-        )
+        match self {
+            Expression::Identifier(_)
+            | Expression::MemberAccess { .. }
+            | Expression::Index { .. } => true,
+            Expression::Unary { operator, .. } => matches!(operator, TokenKind::Star),
+            _ => false,
+        }
     }
 }
