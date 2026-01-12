@@ -1,0 +1,6 @@
+import "string.lun" as str
+import "token.lun" as tok
+
+fn main() {
+    str.println("Token Import Only Start");
+}

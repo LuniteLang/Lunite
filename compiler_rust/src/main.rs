@@ -130,7 +130,27 @@ fn main() {
     match command.as_str() {
         "run" => {
             if let Some(filename) = file_arg {
-                run_file(&filename, lib_paths, opt_level);
+                // Collect args after the script name
+                let mut script_args = Vec::new();
+                let mut found_script = false;
+                for arg in &args {
+                    if found_script {
+                        script_args.push(arg.clone());
+                    }
+                    if arg == &filename {
+                        found_script = true;
+                    }
+                }
+                
+                // Convert to C-style argc/argv
+                let c_args: Vec<std::ffi::CString> = script_args.into_iter()
+                    .map(|s| std::ffi::CString::new(s).unwrap())
+                    .collect();
+                let c_argv: Vec<*const i8> = c_args.iter()
+                    .map(|s| s.as_ptr())
+                    .collect();
+                
+                run_file(&filename, lib_paths, opt_level, c_argv.len() as i32, c_argv.as_ptr());
             } else {
                 eprintln!("Usage: lunite run <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3]");
                 std::process::exit(1);
@@ -188,7 +208,7 @@ fn parse_modules(_entry_file: &str) -> (HashMap<PathBuf, Program>, HashMap<PathB
     (HashMap::new(), HashMap::new())
 }
 
-fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel) {
+fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, argc: i32, argv: *const *const i8) {
     let mut analyzer = SemanticAnalyzer::new(lib_paths);
     let main_path = PathBuf::from(filename);
 
@@ -200,7 +220,7 @@ fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLeve
                 print_error_report(filename, e);
                 std::process::exit(1);
             }
-            generator.run_main();
+            generator.run_main(argc, argv);
         }
         Err(e) => {
             print_error_report(filename, e);

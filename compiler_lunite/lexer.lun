@@ -1,6 +1,5 @@
 import "string.lun" as str
 import "token.lun" as tok
-import "io.lun" as io
 
 pub struct Lexer {
     pub input: string,
@@ -17,8 +16,6 @@ pub fn create(input: string) -> Lexer {
 
 impl Lexer {
     pub fn new(input: string) -> Lexer {
-        // io.log(io.Level::DEBUG, "Inside Lexer.new");
-        str.print("Lexer new");
         let l = Lexer {
             input: input,
             pos: 0,
@@ -27,7 +24,6 @@ impl Lexer {
             line: 1,
             col: 0
         };
-        str.print("Calling read_char");
         l.read_char();
         return l;
     }

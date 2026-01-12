@@ -1,0 +1,8 @@
+import "string.lun" as str
+import "lexer.lun" as lex
+
+fn main() {
+    str.println("Lexer Start");
+    let l = lex.Lexer::new("let x = 1;");
+    str.println("Lexer created");
+}

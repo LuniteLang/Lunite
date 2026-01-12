@@ -39,6 +39,7 @@ pub extern "C" fn lunite_sys_get_arg(i: i64) -> *mut LuniteString {
 
 #[no_mangle]
 pub extern "C" fn lunite_alloc(size: usize, _p1: *mut u8, _p2: *mut u8) -> *mut u8 {
+    println!("[RUNTIME] lunite_alloc({})", size);
     unsafe {
         let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
         let ptr = std::alloc::alloc_zeroed(layout);

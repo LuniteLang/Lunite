@@ -70,7 +70,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 "",
                 OptimizationLevel::None,
                 RelocMode::PIC,
-                CodeModel::Default,
+                CodeModel::Large,
             )
             .expect("Failed to create machine");
         eprintln!(
@@ -137,6 +137,11 @@ impl<'ctx> CodeGenerator<'ctx> {
         let str_ptr_type = context.ptr_type(AddressSpace::default());
         module.add_function(
             "print",
+            void_type.fn_type(&[str_ptr_type.into()], false),
+            None,
+        );
+        module.add_function(
+            "lunite_print",
             void_type.fn_type(&[str_ptr_type.into()], false),
             None,
         );
@@ -325,6 +330,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         extern_functions.insert("lunite_free".to_string());
         extern_functions.insert("lunite_retain".to_string());
         extern_functions.insert("lunite_release".to_string());
+        extern_functions.insert("lunite_print".to_string());
         extern_functions.insert("lunite_print_int".to_string());
         extern_functions.insert("lunite_print_float".to_string());
         extern_functions.insert("lunite_str_eq".to_string());
@@ -333,6 +339,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         extern_functions.insert("lunite_str_substring".to_string());
         extern_functions.insert("lunite_str_at".to_string());
         extern_functions.insert("lunite_io_read_file".to_string());
+        extern_functions.insert("lunite_io_read_file_str".to_string());
         extern_functions.insert("lunite_io_write_file".to_string());
         extern_functions.insert("lunite_sys_system".to_string());
         extern_functions.insert("lunite_sys_exit".to_string());
@@ -348,6 +355,21 @@ impl<'ctx> CodeGenerator<'ctx> {
         extern_functions.insert("lunite_net_close_server".to_string());
         extern_functions.insert("lunite_channel_create".to_string());
         extern_functions.insert("lunite_channel_send".to_string());
+        extern_functions.insert("lunite_channel_recv".to_string());
+        extern_functions.insert("lunite_spawn".to_string());
+        extern_functions.insert("lunite_time_now".to_string());
+        extern_functions.insert("lunite_time_sleep".to_string());
+        extern_functions.insert("lunite_srand".to_string());
+        extern_functions.insert("lunite_rand_int".to_string());
+        extern_functions.insert("lunite_arena_save".to_string());
+        extern_functions.insert("lunite_arena_restore".to_string());
+        extern_functions.insert("lunite_init_args".to_string());
+        extern_functions.insert("lunite_sys_get_argc".to_string());
+        extern_functions.insert("lunite_sys_get_arg".to_string());
+        extern_functions.insert("lunite_throw".to_string());
+        extern_functions.insert("lunite_from_c_str".to_string());
+        extern_functions.insert("__gxx_personality_v0".to_string());
+
         extern_functions.insert("lunite_channel_recv".to_string());
         extern_functions.insert("lunite_spawn".to_string());
         extern_functions.insert("lunite_time_now".to_string());
@@ -563,8 +585,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         };
         let fn_val = self.module.add_function(name, ft, None);
 
-        let attr = self.context.create_string_attribute("frame-pointer", "all");
-        fn_val.add_attribute(AttributeLoc::Function, attr);
+        // let attr = self.context.create_string_attribute("frame-pointer", "all");
+        // fn_val.add_attribute(AttributeLoc::Function, attr);
 
         Ok(())
     }
@@ -640,7 +662,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
     // ...
 
-    pub fn run_main(&self) {
+    pub fn run_main(&self, argc: i32, argv: *const *const i8) {
         eprintln!("[CODEGEN] Starting JIT Execution...");
         self.module.print_to_stderr(); // DEBUG: Print IR
         unsafe {
@@ -650,140 +672,69 @@ impl<'ctx> CodeGenerator<'ctx> {
                 .unwrap();
 
             // Manual Mapping of Runtime Functions
-            if let Some(f) = self.module.get_function("print") {
-                ee.add_global_mapping(&f, crate::runtime::print as usize);
+            let mappings = [
+                ("print", crate::runtime::print as usize),
+                ("lunite_print", crate::runtime::lunite_print as usize),
+                ("lunite_print_int", crate::runtime::lunite_print_int as usize),
+                ("lunite_print_float", crate::runtime::lunite_print_float as usize),
+                ("lunite_alloc", crate::runtime::lunite_alloc as usize),
+                ("lunite_realloc", crate::runtime::lunite_realloc as usize),
+                ("lunite_free", crate::runtime::lunite_free as usize),
+                ("lunite_retain", crate::runtime::lunite_retain as usize),
+                ("lunite_release", crate::runtime::lunite_release as usize),
+                ("lunite_throw", crate::runtime::lunite_throw as usize),
+                ("lunite_str_eq", crate::runtime::lunite_str_eq as usize),
+                ("lunite_str_len_runtime", crate::runtime::lunite_str_len_runtime as usize),
+                ("lunite_str_concat", crate::runtime::lunite_str_concat as usize),
+                ("lunite_str_substring", crate::runtime::lunite_str_substring as usize),
+                ("lunite_str_at", crate::runtime::lunite_str_at as usize),
+                ("lunite_int_to_str", crate::runtime::lunite_int_to_str as usize),
+                ("lunite_io_read_file", crate::runtime::lunite_io_read_file as usize),
+                ("lunite_io_read_file_str", crate::runtime::lunite_io_read_file_str as usize),
+                ("lunite_io_write_file", crate::runtime::lunite_io_write_file as usize),
+                ("lunite_sys_system", crate::runtime::lunite_sys_system as usize),
+                ("lunite_sys_exit", crate::runtime::lunite_sys_exit as usize),
+                ("lunite_init_args", crate::runtime::lunite_init_args as usize),
+                ("lunite_sys_get_argc", crate::runtime::lunite_sys_get_argc as usize),
+                ("lunite_sys_get_arg", crate::runtime::lunite_sys_get_arg as usize),
+                ("lunite_math_pow", crate::runtime::lunite_math_pow as usize),
+                ("lunite_math_abs", crate::runtime::lunite_math_abs as usize),
+                ("lunite_math_ceil", crate::runtime::lunite_math_ceil as usize),
+                ("lunite_math_floor", crate::runtime::lunite_math_floor as usize),
+                ("lunite_time_now", crate::runtime::lunite_time_now as usize),
+                ("lunite_time_sleep", crate::runtime::lunite_time_sleep as usize),
+                ("lunite_srand", crate::runtime::lunite_srand as usize),
+                ("lunite_rand_int", crate::runtime::lunite_rand_int as usize),
+                ("lunite_array_copy", crate::runtime::lunite_array_copy as usize),
+                ("lunite_channel_create", crate::runtime::lunite_channel_create as usize),
+                ("lunite_channel_send", crate::runtime::lunite_channel_send as usize),
+                ("lunite_channel_recv", crate::runtime::lunite_channel_recv as usize),
+                ("lunite_spawn", crate::runtime::lunite_spawn as usize),
+                ("lunite_net_bind", crate::runtime::lunite_net_bind as usize),
+                ("lunite_net_accept", crate::runtime::lunite_net_accept as usize),
+                ("lunite_net_read", crate::runtime::lunite_net_read as usize),
+                ("lunite_net_write", crate::runtime::lunite_net_write as usize),
+                ("lunite_net_close_socket", crate::runtime::lunite_net_close_socket as usize),
+                ("lunite_net_close_server", crate::runtime::lunite_net_close_server as usize),
+                ("lunite_from_c_str", crate::runtime::lunite_from_c_str as usize),
+            ];
+
+            for (name, addr) in mappings {
+                if let Some(f) = self.module.get_function(name) {
+                    eprintln!("[CODEGEN] Mapping function: {} to 0x{:x}", name, addr);
+                    ee.add_global_mapping(&f, addr);
+                }
             }
-            if let Some(f) = self.module.get_function("lunite_print_int") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_print_int as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_print") {
-                ee.add_global_mapping(&f, crate::runtime::print as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_alloc") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_alloc as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_retain") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_retain as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_release") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_release as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_str_eq") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_str_eq as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_str_len_runtime") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_str_len_runtime as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_str_concat") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_str_concat as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_str_substring") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_str_substring as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_str_at") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_str_at as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_int_to_str") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_int_to_str as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_io_read_file") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_io_read_file as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_io_read_file_str") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_io_read_file_str as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_sys_system") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_sys_system as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_sys_exit") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_sys_exit as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_math_pow") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_math_pow as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_math_abs") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_math_abs as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_math_ceil") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_math_ceil as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_math_floor") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_math_floor as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_bind") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_bind as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_accept") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_accept as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_read") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_read as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_write") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_write as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_close_socket") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_close_socket as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_net_close_server") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_net_close_server as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_channel_create") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_channel_create as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_channel_send") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_channel_send as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_channel_recv") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_channel_recv as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_spawn") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_spawn as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_time_now") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_time_now as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_time_sleep") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_time_sleep as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_srand") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_srand as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_rand_int") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_rand_int as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_realloc") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_realloc as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_array_copy") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_array_copy as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_arena_save") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_arena_save as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_arena_restore") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_arena_restore as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_init_args") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_init_args as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_sys_get_argc") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_sys_get_argc as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_sys_get_arg") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_sys_get_arg as usize);
-            }
-            if let Some(f) = self.module.get_function("lunite_print_float") {
-                ee.add_global_mapping(&f, crate::runtime::lunite_print_float as usize);
-            }
+
             if let Some(f) = self.module.get_function("__gxx_personality_v0") {
                 ee.add_global_mapping(&f, crate::runtime::lunite_throw as usize);
             } // Map to dummy
 
-            let main_fn = ee.get_function::<unsafe extern "C" fn() -> i64>("main");
+
+            let main_fn = ee.get_function::<unsafe extern "C" fn(i32, *const *const i8) -> i64>("main");
             if let Ok(main) = main_fn {
-                eprintln!("[CODEGEN] Calling main()...");
-                let res = main.call();
+                eprintln!("[CODEGEN] Calling main() at address 0x{:x}...", main.as_raw() as usize);
+                let res = main.call(argc, argv);
                 eprintln!("[CODEGEN] Main returned: {}", res);
             } else {
                 eprintln!("[CODEGEN] Main function not found!");

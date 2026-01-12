@@ -1,0 +1,5 @@
+import "string.lun" as str
+
+fn main() {
+    str.println("Hello from Self-Hosted Compiler!");
+}

@@ -1,0 +1,6 @@
+import "string.lun" as str
+import "lexer.lun" as lex
+
+fn main() {
+    str.println("Lexer Import Only Start");
+}
