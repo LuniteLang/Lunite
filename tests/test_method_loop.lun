@@ -1,0 +1,21 @@
+import "std/string.lun" as str
+
+struct Counter {
+    val: int
+}
+
+impl Counter {
+    fn inc(mut self: Counter) {
+        self.val = self.val + 1;
+    }
+}
+
+fn main() {
+    let mut c = Counter { val: 0 };
+    let mut i = 0;
+    while i < 5 {
+        c.inc();
+        i = i + 1;
+    }
+    str.println(str.int_to_string(c.val));
+}

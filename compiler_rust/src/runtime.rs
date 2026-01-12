@@ -51,14 +51,16 @@ pub extern "C" fn lunite_alloc(size: usize, _p1: *mut u8, _p2: *mut u8) -> *mut 
     }
 }
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 #[no_mangle]
 pub extern "C" fn lunite_retain(user_ptr: *mut u8) {
     if user_ptr.is_null() {
         return;
     }
     unsafe {
-        let rc_ptr = user_ptr.sub(8) as *mut usize;
-        *rc_ptr += 1;
+        let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
+        (*rc_ptr).fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -68,15 +70,15 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
         return;
     }
     unsafe {
-        let rc_ptr = user_ptr.sub(8) as *mut usize;
-        if *rc_ptr > 0 {
-            *rc_ptr -= 1;
-            if *rc_ptr == 0 {
-                let size_ptr = user_ptr.sub(16) as *mut usize;
-                let size = *size_ptr;
-                let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
-                std::alloc::dealloc(user_ptr.sub(16), layout);
-            }
+        let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
+        // fetch_sub returns the previous value
+        if (*rc_ptr).fetch_sub(1, Ordering::Release) == 1 {
+            // Memory fence to ensure data is synchronized before deallocation
+            std::sync::atomic::fence(Ordering::Acquire);
+            let size_ptr = user_ptr.sub(16) as *mut usize;
+            let size = *size_ptr;
+            let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
+            std::alloc::dealloc(user_ptr.sub(16), layout);
         }
     }
 }
@@ -298,46 +300,163 @@ pub extern "C" fn lunite_math_floor(n: f64) -> f64 {
     n.floor()
 }
 #[no_mangle]
-pub extern "C" fn lunite_net_bind(_port: i64) -> LuniteResult {
-    LuniteResult { tag: 1, payload: 0 }
+pub extern "C" fn lunite_net_connect(host: *const LuniteString, port: i64) -> LuniteResult {
+    unsafe {
+        let host_slice = std::slice::from_raw_parts((*host).ptr, (*host).len);
+        let host_str = std::str::from_utf8_unchecked(host_slice);
+        let addr = format!("{}:{}", host_str, port);
+        match TcpStream::connect(addr) {
+            Ok(stream) => LuniteResult {
+                tag: 0,
+                payload: Box::into_raw(Box::new(stream)) as i64,
+            },
+            Err(_) => LuniteResult { tag: 1, payload: 0 },
+        }
+    }
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_net_accept(_: *mut TcpListener) -> LuniteResult {
-    LuniteResult { tag: 1, payload: 0 }
+pub extern "C" fn lunite_net_bind(port: i64) -> LuniteResult {
+    match TcpListener::bind(format!("0.0.0.0:{}", port)) {
+        Ok(listener) => LuniteResult {
+            tag: 0,
+            payload: Box::into_raw(Box::new(listener)) as i64,
+        },
+        Err(_) => LuniteResult { tag: 1, payload: 0 },
+    }
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_net_read(_: *mut TcpStream) -> LuniteResult {
-    LuniteResult { tag: 1, payload: 0 }
+pub extern "C" fn lunite_net_accept(listener_ptr: *mut TcpListener) -> LuniteResult {
+    if listener_ptr.is_null() {
+        return LuniteResult { tag: 1, payload: 0 };
+    }
+    let listener = unsafe { &*listener_ptr };
+    match listener.accept() {
+        Ok((stream, _)) => LuniteResult {
+            tag: 0,
+            payload: Box::into_raw(Box::new(stream)) as i64,
+        },
+        Err(_) => LuniteResult { tag: 1, payload: 0 },
+    }
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_net_write(_: *mut TcpStream, _: *const LuniteString) {}
+pub extern "C" fn lunite_net_read(stream_ptr: *mut TcpStream) -> *mut LuniteString {
+    if stream_ptr.is_null() {
+        return make_lunite_string("");
+    }
+    let stream = unsafe { &mut *stream_ptr };
+    let mut buffer = [0u8; 4096];
+    use std::io::Read;
+    match stream.read(&mut buffer) {
+        Ok(n) if n > 0 => {
+            let s = String::from_utf8_lossy(&buffer[..n]);
+            make_lunite_string(&s)
+        }
+        _ => make_lunite_string(""),
+    }
+}
+
 #[no_mangle]
-pub extern "C" fn lunite_net_close_socket(_: *mut TcpStream) {}
+pub extern "C" fn lunite_net_write(stream_ptr: *mut TcpStream, s: *const LuniteString) {
+    if stream_ptr.is_null() || s.is_null() {
+        return;
+    }
+    let stream = unsafe { &mut *stream_ptr };
+    let content = unsafe { std::slice::from_raw_parts((*s).ptr, (*s).len) };
+    use std::io::Write;
+    let _ = stream.write_all(content);
+}
+
 #[no_mangle]
-pub extern "C" fn lunite_net_close_server(_: *mut TcpListener) {}
+pub extern "C" fn lunite_net_close_socket(stream_ptr: *mut TcpStream) {
+    if !stream_ptr.is_null() {
+        unsafe {
+            drop(Box::from_raw(stream_ptr));
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_net_close_server(listener_ptr: *mut TcpListener) {
+    if !listener_ptr.is_null() {
+        unsafe {
+            drop(Box::from_raw(listener_ptr));
+        }
+    }
+}
 #[no_mangle]
 pub extern "C" fn lunite_channel_create() -> *mut u8 {
-    ptr::null_mut()
+    let (tx, rx) = std::sync::mpsc::channel::<i64>();
+    Box::into_raw(Box::new(LuniteChannel {
+        sender: tx,
+        receiver: rx,
+    })) as *mut u8
 }
-#[no_mangle]
-pub extern "C" fn lunite_channel_send(_: *mut u8, _: i64) {}
-#[no_mangle]
-pub extern "C" fn lunite_channel_recv(_: *mut u8) -> i64 {
-    0
+
+struct LuniteChannel {
+    sender: std::sync::mpsc::Sender<i64>,
+    receiver: std::sync::mpsc::Receiver<i64>,
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_spawn(_: extern "C" fn(*mut u8), _: *mut u8) {}
+pub extern "C" fn lunite_channel_send(chan_ptr: *mut u8, val: i64) {
+    if chan_ptr.is_null() {
+        return;
+    }
+    let chan = unsafe { &*(chan_ptr as *const LuniteChannel) };
+    let _ = chan.sender.send(val);
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_channel_recv(chan_ptr: *mut u8) -> i64 {
+    if chan_ptr.is_null() {
+        return 0;
+    }
+    let chan = unsafe { &*(chan_ptr as *const LuniteChannel) };
+    chan.receiver.recv().unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_spawn(f: extern "C" fn(*mut u8), arg: *mut u8) {
+    let f_addr = f as usize;
+    let arg_addr = arg as usize;
+    std::thread::spawn(move || unsafe {
+        let f_actual = std::mem::transmute::<usize, extern "C" fn(*mut u8)>(f_addr);
+        f_actual(arg_addr as *mut u8);
+    });
+}
+
 #[no_mangle]
 pub extern "C" fn lunite_time_now() -> i64 {
-    0
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_time_sleep(_: i64) {}
+pub extern "C" fn lunite_time_sleep(ms: i64) {
+    if ms > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+    }
+}
+
 #[no_mangle]
-pub extern "C" fn lunite_srand(_: i64) {}
+pub extern "C" fn lunite_srand(seed: i64) {
+    // Placeholder as Rust's rand is an external crate
+}
+
 #[no_mangle]
 pub extern "C" fn lunite_rand_int() -> i64 {
-    0
+    // Simple LCG for now if we don't want deps
+    static mut SEED: u64 = 12345;
+    unsafe {
+        SEED = SEED.wrapping_mul(6364136223846793005).wrapping_add(1);
+        (SEED >> 33) as i64
+    }
 }
 #[no_mangle]
 pub extern "C" fn lunite_array_copy(src: *mut u8, dst: *mut u8, count: i64, elem_size: i64) {

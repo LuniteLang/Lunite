@@ -1,0 +1,102 @@
+// std/json.lun - JSON Parsing and Serialization
+import "std/string.lun" as str
+
+pub enum JsonValue {
+    Null,
+    Bool(bool),
+    Number(int),
+    String(string),
+    Array(*JsonArray),
+    Object(*JsonObject)
+}
+
+pub struct JsonArray {
+    pub items: [JsonValue; 64],
+    pub len: int
+}
+
+pub struct JsonObject {
+    pub keys: [string; 32],
+    pub values: [JsonValue; 32],
+    pub len: int
+}
+
+// Simple JSON string parser (basic implementation)
+pub fn parse_string(s: string) -> JsonValue {
+    let len = str.length(s);
+    if len == 0 {
+        return JsonValue::Null;
+    }
+    
+    let first = str.char_at(s, 0);
+    
+    // Check for null
+    if first == 110 && len >= 4 { // 'n'
+        return JsonValue::Null;
+    }
+    
+    // Check for true
+    if first == 116 && len >= 4 { // 't'
+        return JsonValue::Bool(true);
+    }
+    
+    // Check for false
+    if first == 102 && len >= 5 { // 'f'
+        return JsonValue::Bool(false);
+    }
+    
+    // Check for string (starts with ")
+    if first == 34 { // '"'
+        let inner = str.sub(s, 1, len - 1);
+        return JsonValue::String(inner);
+    }
+    
+    // Check for number (starts with digit or minus)
+    if (first >= 48 && first <= 57) || first == 45 {
+        // Simple int parsing
+        let mut val = 0;
+        let mut i = 0;
+        let mut neg = false;
+        if first == 45 {
+            neg = true;
+            i = 1;
+        }
+        while i < len {
+            let c = str.char_at(s, i);
+            if c >= 48 && c <= 57 {
+                val = val * 10 + (c - 48);
+            }
+            i = i + 1;
+        }
+        if neg {
+            val = 0 - val;
+        }
+        return JsonValue::Number(val);
+    }
+    
+    return JsonValue::Null;
+}
+
+// Serialize JsonValue to string
+pub fn stringify(v: JsonValue) -> string {
+    when v {
+        JsonValue::Null => {
+            return "null";
+        }
+        JsonValue::Bool(b) => {
+            if b {
+                return "true";
+            }
+            return "false";
+        }
+        JsonValue::Number(n) => {
+            return str.int_to_string(n);
+        }
+        JsonValue::String(s) => {
+            return str.concat(str.concat("\"", s), "\"");
+        }
+        else => {
+            return "null";
+        }
+    }
+}

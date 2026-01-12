@@ -1,0 +1,81 @@
+// std/http.lun - HTTP Client
+import "std/string.lun" as str
+import "std/net.lun" as net
+
+pub struct HttpResponse {
+    pub status: int,
+    pub body: string
+}
+
+// Simple HTTP GET request
+pub fn get(host: string, port: int, path: string) -> HttpResponse {
+    let stream = net.connect(host, port);
+    if stream == null {
+        return HttpResponse { status: -1, body: "Connection failed" };
+    }
+    
+    // Build HTTP request
+    let request = str.concat("GET ", path);
+    let request = str.concat(request, " HTTP/1.1\r\nHost: ");
+    let request = str.concat(request, host);
+    let request = str.concat(request, "\r\nConnection: close\r\n\r\n");
+    
+    net.write(stream, request);
+    
+    let response = net.read(stream);
+    net.close_stream(stream);
+    
+    // Parse status code (very basic)
+    let status = 200;
+    if str.length(response) > 12 {
+        // HTTP/1.1 XXX
+        let code_str = str.sub(response, 9, 12);
+        // Simple parsing
+        let c1 = str.char_at(code_str, 0) - 48;
+        let c2 = str.char_at(code_str, 1) - 48;
+        let c3 = str.char_at(code_str, 2) - 48;
+        status = c1 * 100 + c2 * 10 + c3;
+    }
+    
+    // Find body (after \r\n\r\n)
+    let body = response;
+    let len = str.length(response);
+    let mut i = 0;
+    while i < len - 3 {
+        if str.char_at(response, i) == 13 &&
+           str.char_at(response, i+1) == 10 &&
+           str.char_at(response, i+2) == 13 &&
+           str.char_at(response, i+3) == 10 {
+            body = str.sub(response, i + 4, len);
+            i = len;
+        }
+        i = i + 1;
+    }
+    
+    return HttpResponse { status: status, body: body };
+}
+
+// Simple HTTP POST request
+pub fn post(host: string, port: int, path: string, body: string) -> HttpResponse {
+    let stream = net.connect(host, port);
+    if stream == null {
+        return HttpResponse { status: -1, body: "Connection failed" };
+    }
+    
+    let body_len = str.int_to_string(str.length(body));
+    
+    let request = str.concat("POST ", path);
+    let request = str.concat(request, " HTTP/1.1\r\nHost: ");
+    let request = str.concat(request, host);
+    let request = str.concat(request, "\r\nContent-Length: ");
+    let request = str.concat(request, body_len);
+    let request = str.concat(request, "\r\nConnection: close\r\n\r\n");
+    let request = str.concat(request, body);
+    
+    net.write(stream, request);
+    
+    let response = net.read(stream);
+    net.close_stream(stream);
+    
+    return HttpResponse { status: 200, body: response };
+}

@@ -2543,8 +2543,70 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 Ok(())
             }
             TStatement::Spawn(e) => {
-                let val = self.compile_expression(e)?;
-                // Mock implementation for spawn
+                if let TExpressionKind::Call { function, args } = &e.kind {
+                    let mut arg_vals = Vec::new();
+                    for arg in args {
+                        arg_vals.push(self.compile_expression(arg)?);
+                    }
+
+                    let spawn_fn =
+                        self.gen
+                            .module
+                            .get_function("lunite_spawn")
+                            .unwrap_or_else(|| {
+                                let void_type = self.gen.context.void_type();
+                                let ptr_type = self.gen.context.ptr_type(AddressSpace::default());
+                                let func_type =
+                                    void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false);
+                                self.gen
+                                    .module
+                                    .add_function("lunite_spawn", func_type, None)
+                            });
+
+                    let target_fn = self
+                        .gen
+                        .module
+                        .get_function(function)
+                        .expect("Spawned function not found");
+
+                    // Simple case: function takes one argument that fits in a pointer
+                    let arg0 = if !arg_vals.is_empty() {
+                        let v = arg_vals[0];
+                        if v.is_pointer_value() {
+                            v.into_pointer_value()
+                        } else {
+                            // Cast int to pointer for lunite_spawn
+                            self.gen
+                                .builder
+                                .build_int_to_ptr(
+                                    v.into_int_value(),
+                                    self.gen.context.ptr_type(AddressSpace::default()),
+                                    "argcat",
+                                )
+                                .unwrap()
+                        }
+                    } else {
+                        self.gen
+                            .context
+                            .ptr_type(AddressSpace::default())
+                            .const_null()
+                    };
+
+                    let fn_ptr_cast = self
+                        .gen
+                        .builder
+                        .build_bit_cast(
+                            target_fn.as_global_value().as_pointer_value(),
+                            self.gen.context.ptr_type(AddressSpace::default()),
+                            "fn_cast",
+                        )
+                        .unwrap();
+
+                    self.gen
+                        .builder
+                        .build_call(spawn_fn, &[fn_ptr_cast.into(), arg0.into()], "")
+                        .unwrap();
+                }
                 Ok(())
             }
             TStatement::TryCatch {

@@ -1,7 +1,11 @@
 import "ast.lun" as ast
+import "semantic.lun" as sem
+import "string.lun" as str
+import "list.lun" as list
 
 pub struct CodegenC {
-    pub output: string
+    pub output: string,
+    pub indent: int
 }
 
 pub fn create() -> CodegenC {
@@ -10,10 +14,271 @@ pub fn create() -> CodegenC {
 
 impl CodegenC {
     pub fn new() -> CodegenC {
-        return CodegenC { output: "" };
+        return CodegenC { output: "", indent: 0 };
     }
-
-    pub fn generate(self: CodegenC, p: ast.Program) -> string {
-        return "void main() {}";
+    
+    fn emit(mut self: CodegenC, s: string) {
+        self.output = str.concat(self.output, s);
+    }
+    
+    fn emit_line(mut self: CodegenC, s: string) {
+        let mut i = 0;
+        while i < self.indent {
+            self.emit("    ");
+            i = i + 1;
+        }
+        self.emit(s);
+        self.emit("\n");
+    }
+    
+    fn emit_newline(mut self: CodegenC) {
+        self.emit("\n");
+    }
+    
+    // Generate C type from Lunite type
+    fn gen_type(self: CodegenC, t: ast.Type) -> string {
+        when t {
+            ast.Type::Int => { return "int64_t"; }
+            ast.Type::Float => { return "double"; }
+            ast.Type::Bool => { return "int"; }
+            ast.Type::String => { return "LuniteString*"; }
+            ast.Type::Void => { return "void"; }
+            ast.Type::Pointer(inner) => {
+                return str.concat(self.gen_type(*inner), "*");
+            }
+            ast.Type::Custom(payload) => {
+                return str.concat("struct ", payload.name);
+            }
+            else => { return "void*"; }
+        }
+    }
+    
+    // Generate header with includes and runtime declarations
+    fn gen_header(mut self: CodegenC) {
+        self.emit_line("#include <stdint.h>");
+        self.emit_line("#include <stdlib.h>");
+        self.emit_line("#include <string.h>");
+        self.emit_line("#include <stdio.h>");
+        self.emit_newline();
+        
+        // Runtime declarations
+        self.emit_line("// Lunite Runtime");
+        self.emit_line("typedef struct { char* ptr; size_t len; } LuniteString;");
+        self.emit_line("extern void* lunite_alloc(size_t size, void* p1, void* p2);");
+        self.emit_line("extern void lunite_retain(void* ptr);");
+        self.emit_line("extern void lunite_release(void* ptr);");
+        self.emit_line("extern void lunite_print(LuniteString* s);");
+        self.emit_line("extern LuniteString* lunite_str_concat(LuniteString* a, LuniteString* b);");
+        self.emit_line("extern int64_t lunite_str_len_runtime(LuniteString* s);");
+        self.emit_newline();
+    }
+    
+    // Generate struct declaration
+    fn gen_struct(mut self: CodegenC, s: ast.StructDecl) {
+        self.emit_line(str.concat(str.concat("typedef struct ", s.name), " {"));
+        self.indent = self.indent + 1;
+        
+        let mut i = 0;
+        while i < s.fields.len() {
+            let f = s.fields.get(i);
+            let type_str = self.gen_type(f.typ);
+            self.emit_line(str.concat(str.concat(str.concat(type_str, " "), f.name), ";"));
+            i = i + 1;
+        }
+        
+        self.indent = self.indent - 1;
+        self.emit_line(str.concat(str.concat("} ", s.name), ";"));
+        self.emit_newline();
+    }
+    
+    // Generate expression
+    fn gen_expr(self: CodegenC, e: ast.Expression) -> string {
+        when e {
+            ast.Expression::Int(n) => {
+                return str.int_to_string(n);
+            }
+            ast.Expression::Boolean(b) => {
+                if b { return "1"; }
+                return "0";
+            }
+            ast.Expression::Null => {
+                return "NULL";
+            }
+            ast.Expression::Identifier(name) => {
+                return name;
+            }
+            ast.Expression::String(s) => {
+                // Create string literal
+                return str.concat(str.concat("make_str(\"", s), "\")");
+            }
+            ast.Expression::Binary(payload) => {
+                let left = self.gen_expr(*payload.left);
+                let right = self.gen_expr(*payload.right);
+                let op = self.gen_op(payload.operator);
+                return str.concat(str.concat(str.concat(str.concat("(", left), op), right), ")");
+            }
+            ast.Expression::Call(payload) => {
+                let func = self.gen_expr(*payload.function);
+                let mut args_str = "";
+                let mut i = 0;
+                while i < payload.args.len() {
+                    if i > 0 {
+                        args_str = str.concat(args_str, ", ");
+                    }
+                    args_str = str.concat(args_str, self.gen_expr(payload.args.get(i)));
+                    i = i + 1;
+                }
+                return str.concat(str.concat(str.concat(func, "("), args_str), ")");
+            }
+            ast.Expression::MemberAccess(payload) => {
+                let obj = self.gen_expr(*payload.object);
+                return str.concat(str.concat(obj, "."), payload.field);
+            }
+            else => {
+                return "/* unsupported expr */";
+            }
+        }
+    }
+    
+    fn gen_op(self: CodegenC, op: tok.TokenKind) -> string {
+        when op {
+            tok.TokenKind::Plus => { return " + "; }
+            tok.TokenKind::Minus => { return " - "; }
+            tok.TokenKind::Star => { return " * "; }
+            tok.TokenKind::Slash => { return " / "; }
+            tok.TokenKind::EqualEqual => { return " == "; }
+            tok.TokenKind::BangEqual => { return " != "; }
+            tok.TokenKind::Less => { return " < "; }
+            tok.TokenKind::Greater => { return " > "; }
+            tok.TokenKind::LessEqual => { return " <= "; }
+            tok.TokenKind::GreaterEqual => { return " >= "; }
+            tok.TokenKind::AndAnd => { return " && "; }
+            tok.TokenKind::PipePipe => { return " || "; }
+            else => { return " ? "; }
+        }
+    }
+    
+    // Generate statement
+    fn gen_stmt(mut self: CodegenC, s: ast.Statement) {
+        when s {
+            ast.Statement::Let(payload) => {
+                let type_str = "void*";
+                when payload.type_name {
+                    ast.Option::Some(t) => {
+                        type_str = self.gen_type(t);
+                    }
+                    else => {}
+                }
+                let mut line = str.concat(str.concat(type_str, " "), payload.name);
+                when payload.value {
+                    ast.Option::Some(val) => {
+                        line = str.concat(str.concat(line, " = "), self.gen_expr(val));
+                    }
+                    else => {}
+                }
+                self.emit_line(str.concat(line, ";"));
+            }
+            ast.Statement::Return(opt_expr) => {
+                when opt_expr {
+                    ast.Option::Some(expr) => {
+                        self.emit_line(str.concat(str.concat("return ", self.gen_expr(expr)), ";"));
+                    }
+                    else => {
+                        self.emit_line("return;");
+                    }
+                }
+            }
+            ast.Statement::Expr(e) => {
+                self.emit_line(str.concat(self.gen_expr(e), ";"));
+            }
+            ast.Statement::If(payload) => {
+                self.emit_line(str.concat(str.concat("if (", self.gen_expr(payload.condition)), ") {"));
+                self.indent = self.indent + 1;
+                self.gen_block(payload.then_branch);
+                self.indent = self.indent - 1;
+                when payload.else_branch {
+                    ast.Option::Some(else_blk) => {
+                        self.emit_line("} else {");
+                        self.indent = self.indent + 1;
+                        self.gen_block(else_blk);
+                        self.indent = self.indent - 1;
+                    }
+                    else => {}
+                }
+                self.emit_line("}");
+            }
+            ast.Statement::While(payload) => {
+                self.emit_line(str.concat(str.concat("while (", self.gen_expr(payload.condition)), ") {"));
+                self.indent = self.indent + 1;
+                self.gen_block(payload.body);
+                self.indent = self.indent - 1;
+                self.emit_line("}");
+            }
+            else => {
+                self.emit_line("/* unsupported stmt */");
+            }
+        }
+    }
+    
+    fn gen_block(mut self: CodegenC, b: ast.Block) {
+        let mut i = 0;
+        while i < b.statements.len() {
+            self.gen_stmt(b.statements.get(i));
+            i = i + 1;
+        }
+    }
+    
+    // Generate function
+    fn gen_function(mut self: CodegenC, f: ast.FunctionDecl) {
+        let ret_type = self.gen_type(f.return_type);
+        let mut params_str = "";
+        
+        let mut i = 0;
+        while i < f.params.len() {
+            if i > 0 {
+                params_str = str.concat(params_str, ", ");
+            }
+            let p = f.params.get(i);
+            params_str = str.concat(params_str, str.concat(str.concat(self.gen_type(p.typ), " "), p.name));
+            i = i + 1;
+        }
+        
+        self.emit_line(str.concat(str.concat(str.concat(str.concat(ret_type, " "), f.name), "("), str.concat(params_str, ") {")));
+        self.indent = self.indent + 1;
+        self.gen_block(f.body);
+        self.indent = self.indent - 1;
+        self.emit_line("}");
+        self.emit_newline();
+    }
+    
+    // Main generation entry point
+    pub fn generate(mut self: CodegenC, p: ast.Program) -> string {
+        self.gen_header();
+        
+        // First pass: structs
+        let mut i = 0;
+        while i < p.items.len() {
+            when p.items.get(i) {
+                ast.Item::Struct(s) => {
+                    self.gen_struct(s);
+                }
+                else => {}
+            }
+            i = i + 1;
+        }
+        
+        // Second pass: functions
+        i = 0;
+        while i < p.items.len() {
+            when p.items.get(i) {
+                ast.Item::Function(f) => {
+                    self.gen_function(f);
+                }
+                else => {}
+            }
+            i = i + 1;
+        }
+        
+        return self.output;
     }
 }

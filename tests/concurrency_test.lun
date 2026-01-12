@@ -1,0 +1,19 @@
+import "std/string.lun" as str
+import "std/sync.lun" as sync
+
+fn worker(ch: *void) {
+    str.println("Worker: Sleeping for 1s...");
+    sync.sleep(1000);
+    str.println("Worker: Sending message...");
+    sync.send(sync.Channel { handle: ch }, 42);
+}
+
+fn main() {
+    let chan = sync.create_channel();
+    str.println("Main: Spawning worker...");
+    spawn worker(chan.handle);
+    
+    str.println("Main: Waiting for message...");
+    let val = sync.recv(chan);
+    str.println(str.concat("Main: Received: ", str.int_to_string(val)));
+}
