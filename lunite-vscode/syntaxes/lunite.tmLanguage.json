@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Lunite",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#comments"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.lunite",
+          "match": "\\b(if|else|while|for|return|break|continue|when)\\b"
+        },
+        {
+          "name": "keyword.other.lunite",
+          "match": "\\b(fn|let|mut|struct|enum|impl|pub|import|as)\\b"
+        },
+        {
+          "name": "storage.type.lunite",
+          "match": "\\b(int|float|bool|string|void)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.lunite",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.lunite",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.lunite",
+          "match": "//.*$"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.lunite"
+}

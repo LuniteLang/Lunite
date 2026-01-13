@@ -21,45 +21,33 @@ pub struct TcpListener {
     pub handle: *void
 }
 
-pub fn connect(host: string, port: int) -> *TcpStream {
+pub fn connect(host: string, port: int) -> TcpStream {
     let res = lunite_net_connect(host, port);
-    if res.tag == 0 {
-        let s = TcpStream { handle: res.payload };
-        return &s;
-    }
-    return null;
+    return TcpStream { handle: res.payload };
 }
 
-pub fn bind(port: int) -> *TcpListener {
+pub fn bind(port: int) -> TcpListener {
     let res = lunite_net_bind(port);
-    if res.tag == 0 {
-        let l = TcpListener { handle: res.payload };
-        return &l;
-    }
-    return null;
+    return TcpListener { handle: res.payload };
 }
 
-pub fn accept(listener: *TcpListener) -> *TcpStream {
+pub fn accept(listener: TcpListener) -> TcpStream {
     let res = lunite_net_accept(listener.handle);
-    if res.tag == 0 {
-        let s = TcpStream { handle: res.payload };
-        return &s;
-    }
-    return null;
+    return TcpStream { handle: res.payload };
 }
 
-pub fn read(stream: *TcpStream) -> string {
+pub fn read(stream: TcpStream) -> string {
     return lunite_net_read(stream.handle);
 }
 
-pub fn write(stream: *TcpStream, s: string) {
+pub fn write(stream: TcpStream, s: string) {
     lunite_net_write(stream.handle, s);
 }
 
-pub fn close_stream(stream: *TcpStream) {
+pub fn close_stream(stream: TcpStream) {
     lunite_net_close_socket(stream.handle);
 }
 
-pub fn close_listener(listener: *TcpListener) {
+pub fn close_listener(listener: TcpListener) {
     lunite_net_close_server(listener.handle);
 }
