@@ -6,7 +6,7 @@ use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassManager;
 use inkwell::targets::{
-    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine,
+    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
 use inkwell::types::{
     BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType, PointerType, StructType,
@@ -57,11 +57,18 @@ enum VarLoc<'ctx> {
 }
 
 impl<'ctx> CodeGenerator<'ctx> {
-    pub fn new(context: &'ctx Context, opt_level: OptimizationLevel) -> Self {
+    pub fn new(context: &'ctx Context, opt_level: OptimizationLevel, target_triple: Option<String>) -> Self {
         Target::initialize_native(&InitializationConfig::default())
             .expect("Failed to init native target");
-        let triple = TargetMachine::get_default_triple();
-        eprintln!("[CODEGEN] Default Triple: {:?}", triple);
+        Target::initialize_webassembly(&InitializationConfig::default()); // Support WASM
+
+        let triple = if let Some(t) = target_triple {
+            TargetTriple::create(&t)
+        } else {
+            TargetMachine::get_default_triple()
+        };
+        
+        eprintln!("[CODEGEN] Target Triple: {:?}", triple);
         let target = Target::from_triple(&triple).expect("Failed to create target");
         let target_machine = target
             .create_target_machine(
@@ -70,7 +77,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 "",
                 OptimizationLevel::None,
                 RelocMode::PIC,
-                CodeModel::Large,
+                CodeModel::Default,
             )
             .expect("Failed to create machine");
         eprintln!(
@@ -186,6 +193,11 @@ impl<'ctx> CodeGenerator<'ctx> {
         module.add_function(
             "lunite_io_read_file",
             result_type.fn_type(&[str_ptr_type.into()], false),
+            None,
+        );
+        module.add_function(
+            "lunite_io_read_file_str",
+            str_ptr_type.fn_type(&[str_ptr_type.into()], false),
             None,
         );
         module.add_function(
@@ -564,6 +576,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         params: &[(String, Type, bool)],
         ret: &Type,
     ) -> Result<(), CompileError> {
+        eprintln!("[DEBUG] Compiling prototype for: {}", name);
         if self.extern_functions.contains(name) {
             return Ok(());
         }
@@ -679,7 +692,6 @@ impl<'ctx> CodeGenerator<'ctx> {
                 ("lunite_print_float", crate::runtime::lunite_print_float as usize),
                 ("lunite_alloc", crate::runtime::lunite_alloc as usize),
                 ("lunite_realloc", crate::runtime::lunite_realloc as usize),
-                ("lunite_free", crate::runtime::lunite_free as usize),
                 ("lunite_retain", crate::runtime::lunite_retain as usize),
                 ("lunite_release", crate::runtime::lunite_release as usize),
                 ("lunite_throw", crate::runtime::lunite_throw as usize),
@@ -743,17 +755,18 @@ impl<'ctx> CodeGenerator<'ctx> {
     }
 
     pub fn build_object_file(&self, path: &Path) -> Result<(), String> {
-        let tm = Target::from_triple(&TargetMachine::get_default_triple())
-            .unwrap()
+        let triple = self.module.get_triple();
+        let target = Target::from_triple(&triple).map_err(|e| e.to_string())?;
+        let tm = target
             .create_target_machine(
-                &TargetMachine::get_default_triple(),
+                &triple,
                 "generic",
                 "",
-                OptimizationLevel::Aggressive,
+                self.opt_level,
                 RelocMode::PIC,
                 CodeModel::Default,
             )
-            .unwrap();
+            .ok_or("Failed to create target machine".to_string())?;
         tm.write_to_file(&self.module, FileType::Object, path)
             .map_err(|e| e.to_string())
     }
@@ -1865,6 +1878,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .into())
             }
             TExpressionKind::Call { function, args } => {
+                eprintln!("[DEBUG] Generating Call to: {}", function);
                 let func = self
                     .gen
                     .module

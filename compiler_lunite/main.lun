@@ -1,6 +1,106 @@
 import "string.lun" as str
-import "parser.lun" as parser
+import "list.lun" as list
+import "ast.lun" as ast
+import "codegen_c.lun" as codegen
+import "token.lun" as tok
+
+extern fn lunite_io_read_file_str(path: string) -> string
 
 fn main() {
-    str.println("Start Minimal with Parser Import (Simplified)");
+    str.println("--- Starting Codegen Test ---");
+
+    // Construct a simple AST:
+    // fn test_func() {
+    //     let x = 10;
+    //     let y = x * 20;
+    //     for i in 0..5 {
+    //         y = y + i;
+    //     }
+    //     return y;
+    // }
+
+    let stmts = list.List<ast.Statement>.new(0);
+
+    // let x = 10;
+    let val_10 = ast.Expression::Int(10);
+    let let_x = ast.Statement::Let(ast.LetStatementPayload {
+        name: "x",
+        is_mutable: false,
+        type_name: ast.Option<ast.Type>::Some(ast.Type::Int),
+        value: ast.Option<ast.Expression>::Some(val_10)
+    });
+    stmts.push(let_x);
+
+    // let y = x * 20;
+    let var_x = ast.Expression::Identifier("x");
+    let val_20 = ast.Expression::Int(20);
+    let bin_mul = ast.Expression::Binary(ast.BinaryExpressionPayload {
+        left: &var_x,
+        operator: tok.TokenKind::Star,
+        right: &val_20
+    });
+    let let_y = ast.Statement::Let(ast.LetStatementPayload {
+        name: "y",
+        is_mutable: true,
+        type_name: ast.Option<ast.Type>::Some(ast.Type::Int),
+        value: ast.Option<ast.Expression>::Some(bin_mul)
+    });
+    stmts.push(let_y);
+
+    // for i in 0..5 { y = y + i; }
+    let for_body_stmts = list.List<ast.Statement>.new(0);
+    
+    // y = y + i
+    let var_y = ast.Expression::Identifier("y");
+    let var_i = ast.Expression::Identifier("i");
+    let y_plus_i = ast.Expression::Binary(ast.BinaryExpressionPayload {
+        left: &var_y,
+        operator: tok.TokenKind::Plus,
+        right: &var_i
+    });
+    let assign_y = ast.Statement::Assign(ast.AssignStatementPayload {
+        lvalue: var_y,
+        value: y_plus_i
+    });
+    for_body_stmts.push(assign_y);
+
+    let for_stmt = ast.Statement::For(ast.ForStatementPayload {
+        variable: "i",
+        start: ast.Expression::Int(0),
+        end: ast.Expression::Int(5),
+        body: ast.Block { statements: for_body_stmts }
+    });
+    stmts.push(for_stmt);
+
+    // return y;
+    let ret_stmt = ast.Statement::Return(ast.Option<ast.Expression>::Some(ast.Expression::Identifier("y")));
+    stmts.push(ret_stmt);
+
+    // Function Body
+    let body = ast.Block { statements: stmts };
+
+    // Function Decl
+    let func = ast.FunctionDecl {
+        name: "test_func",
+        generic_params: list.List<string>.new(0),
+        params: list.List<ast.Param>.new(0),
+        return_type: ast.Type::Int,
+        body: body,
+        visibility: ast.Visibility::Public,
+        is_pure: false,
+        contract: ast.Option<ast.Expression>::None
+    };
+
+    // Program
+    let items = list.List<ast.Item>.new(0);
+    items.push(ast.Item::Function(func));
+    let prog = ast.Program { items: items };
+
+    // Run Codegen
+    let gen = codegen.CodegenC.new();
+    let code = gen.generate(prog);
+
+    str.println("--- Generated C Code ---");
+    str.println(code);
+    str.println("--- End Codegen Test ---");
 }

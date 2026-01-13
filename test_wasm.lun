@@ -1,0 +1,5 @@
+extern fn lunite_print_int(n: int)
+
+fn main() {
+    lunite_print_int(1337);
+}

@@ -231,11 +231,22 @@ impl CodegenC {
             ast.Expression::Binary(payload) => {
                 let left = self.gen_expr(*payload.left);
                 let right = self.gen_expr(*payload.right);
-                if (payload.operator == tok.TokenKind::Plus) {
-                     // TODO
-                }
                 let op = self.gen_op(payload.operator);
-                return string_lib.concat(string_lib.concat(string_lib.concat(left, op), right));
+                let part1 = string_lib.concat("(", left);
+                let part2 = string_lib.concat(" ", op);
+                let part3 = string_lib.concat(" ", right);
+                return string_lib.concat(string_lib.concat(string_lib.concat(part1, part2), part3), ")");
+            }
+
+            ast.Expression::Unary(payload) => {
+                let right = self.gen_expr(*payload.right);
+                let op_str = "";
+                when (payload.operator) {
+                    tok.TokenKind::Minus => { op_str = "-"; }
+                    tok.TokenKind::Bang => { op_str = "!"; }
+                    else => {}
+                }
+                return string_lib.concat(string_lib.concat("(", op_str), string_lib.concat(right, ")"));
             }
             
             ast.Expression::Call(payload) => {
@@ -295,6 +306,19 @@ impl CodegenC {
                  return string_lib.concat(init, " }");
             }
             
+            ast.Expression::Index(payload) => {
+                 let left = self.gen_expr(*payload.left);
+                 let idx = self.gen_expr(*payload.index);
+                 return string_lib.concat(string_lib.concat(string_lib.concat(left, "["), idx), "]");
+            }
+
+            ast.Expression::Cast(payload) => {
+                 let expr = self.gen_expr(*payload.expression);
+                 let type_str = self.gen_type(payload.target_type);
+                 let cast_part = string_lib.concat(string_lib.concat("((", type_str), "))");
+                 return string_lib.concat(cast_part, expr);
+            }
+
             else => { return "/* expr? */"; }
         }
     }
@@ -303,8 +327,17 @@ impl CodegenC {
         when (op) {
             tok.TokenKind::Plus => { return "+"; }
             tok.TokenKind::Minus => { return "-"; }
+            tok.TokenKind::Star => { return "*"; }
+            tok.TokenKind::Slash => { return "/"; }
+            tok.TokenKind::Percent => { return "%"; }
             tok.TokenKind::EqualEqual => { return "=="; }
             tok.TokenKind::BangEqual => { return "!="; }
+            tok.TokenKind::Less => { return "<"; }
+            tok.TokenKind::LessEqual => { return "<="; }
+            tok.TokenKind::Greater => { return ">"; }
+            tok.TokenKind::GreaterEqual => { return ">="; }
+            tok.TokenKind::AndAnd => { return "&&"; }
+            tok.TokenKind::PipePipe => { return "||"; }
             else => { return "+"; }
         }
     }
@@ -320,18 +353,29 @@ impl CodegenC {
                     else => {}
                 }
                 
-                self.emit_line(string_lib.concat(string_lib.concat(type_str, " "), payload.name), ";");
+                let decl = string_lib.concat(string_lib.concat(type_str, " "), payload.name);
+                self.emit_line(string_lib.concat(decl, ";"));
+                
                 when (payload.value) {
                     ast.Option::Some(v) => {
-                        self.emit_line(string_lib.concat(string_lib.concat(payload.name, " = "), self.gen_expr(v)), ";");
+                        let assign = string_lib.concat(string_lib.concat(payload.name, " = "), self.gen_expr(v));
+                        self.emit_line(string_lib.concat(assign, ";"));
                     }
                     else => {}
                 }
             }
+            ast.Statement::Assign(payload) => {
+                let l = self.gen_expr(payload.lvalue);
+                let r = self.gen_expr(payload.value);
+                let stmt = string_lib.concat(string_lib.concat(l, " = "), r);
+                self.emit_line(string_lib.concat(stmt, ";"));
+            }
             ast.Statement::Return(opt) => {
                 when (opt) {
                     ast.Option::Some(e) => {
-                        self.emit_line(string_lib.concat("return ", self.gen_expr(e)), ";");
+                        let ret_expr = self.gen_expr(e);
+                        let ret_stmt = string_lib.concat("return ", ret_expr);
+                        self.emit_line(string_lib.concat(ret_stmt, ";"));
                     }
                     else => { self.emit_line("return;"); }
                 }
@@ -356,9 +400,45 @@ impl CodegenC {
                 self.emit_line("}");
             }
             ast.Statement::While(payload) => {
-                 self.emit_line(string_lib.concat("while (", self.gen_expr(payload.condition)), ") {");
+                 let w_cond = string_lib.concat("while (", self.gen_expr(payload.condition));
+                 self.emit_line(string_lib.concat(w_cond, ") {"));
                  self.indent = self.indent + 1;
                  self.gen_block(payload.body);
+                 self.indent = self.indent - 1;
+                 self.emit_line("}");
+            }
+            ast.Statement::For(payload) => {
+                 self.emit_line("{");
+                 self.indent = self.indent + 1;
+                 
+                 let start_str = self.gen_expr(payload.start);
+                 let decl_start = string_lib.concat(string_lib.concat("int64_t ", payload.variable), " = ");
+                 self.emit_line(string_lib.concat(string_lib.concat(decl_start, start_str), ";"));
+                 
+                 let end_var = self.next_temp();
+                 let end_str = self.gen_expr(payload.end);
+                 let decl_end = string_lib.concat(string_lib.concat("int64_t ", end_var), " = ");
+                 self.emit_line(string_lib.concat(string_lib.concat(decl_end, end_str), ";"));
+                 
+                 let loop_cond = string_lib.concat(string_lib.concat(string_lib.concat("while (", payload.variable), " < "), end_var);
+                 self.emit_line(string_lib.concat(loop_cond, ") {"));
+                 self.indent = self.indent + 1;
+                 
+                 self.gen_block(payload.body);
+                 
+                 let inc_part = string_lib.concat(payload.variable, " + 1;");
+                 self.emit_line(string_lib.concat(string_lib.concat(payload.variable, " = "), inc_part));
+                 
+                 self.indent = self.indent - 1;
+                 self.emit_line("}");
+                 
+                 self.indent = self.indent - 1;
+                 self.emit_line("}");
+            }
+            ast.Statement::Block(b) => {
+                 self.emit_line("{");
+                 self.indent = self.indent + 1;
+                 self.gen_block(b);
                  self.indent = self.indent - 1;
                  self.emit_line("}");
             }

@@ -94,6 +94,7 @@ fn main() {
     let mut lib_paths = Vec::new();
     let mut file_arg = None;
     let mut opt_level = OptimizationLevel::None;
+    let mut target_triple = None;
     let mut i = 2;
 
     while i < args.len() {
@@ -103,6 +104,14 @@ fn main() {
                 i += 2;
             } else {
                 eprintln!("Error: --lib-path requires a path argument");
+                std::process::exit(1);
+            }
+        } else if args[i] == "--target" {
+            if i + 1 < args.len() {
+                target_triple = Some(args[i + 1].clone());
+                i += 2;
+            } else {
+                eprintln!("Error: --target requires a triple argument");
                 std::process::exit(1);
             }
         } else if args[i] == "-O1" {
@@ -150,17 +159,17 @@ fn main() {
                     .map(|s| s.as_ptr())
                     .collect();
                 
-                run_file(&filename, lib_paths, opt_level, c_argv.len() as i32, c_argv.as_ptr());
+                run_file(&filename, lib_paths, opt_level, target_triple, c_argv.len() as i32, c_argv.as_ptr());
             } else {
-                eprintln!("Usage: lunite run <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3]");
+                eprintln!("Usage: lunite run <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3] [--target <triple>]");
                 std::process::exit(1);
             }
         }
         "build" => {
             if let Some(filename) = file_arg {
-                build_file(&filename, lib_paths, opt_level);
+                build_file(&filename, lib_paths, opt_level, target_triple);
             } else {
-                eprintln!("Usage: lunite build <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3]");
+                eprintln!("Usage: lunite build <file.lun> [--lib-path <path>] [-O0/-O1/-O2/-O3] [--target <triple>]");
                 std::process::exit(1);
             }
         }
@@ -208,14 +217,14 @@ fn parse_modules(_entry_file: &str) -> (HashMap<PathBuf, Program>, HashMap<PathB
     (HashMap::new(), HashMap::new())
 }
 
-fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, argc: i32, argv: *const *const i8) {
+fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>, argc: i32, argv: *const *const i8) {
     let mut analyzer = SemanticAnalyzer::new(lib_paths);
     let main_path = PathBuf::from(filename);
 
     match analyzer.analyze_main(main_path) {
         Ok(modules) => {
             let context = Context::create();
-            let mut generator = CodeGenerator::new(&context, opt_level);
+            let mut generator = CodeGenerator::new(&context, opt_level, target);
             if let Err(e) = generator.compile_modules(modules) {
                 print_error_report(filename, e);
                 std::process::exit(1);
@@ -229,7 +238,7 @@ fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLeve
     }
 }
 
-fn build_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel) {
+fn build_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>) {
     ensure_runtime_lib();
 
     let args: Vec<String> = std::env::args().collect();
@@ -248,7 +257,7 @@ fn build_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLe
     match analyzer.analyze_main(PathBuf::from(filename)) {
         Ok(modules) => {
             let context = Context::create();
-            let mut generator = CodeGenerator::new(&context, opt_level);
+            let mut generator = CodeGenerator::new(&context, opt_level, target);
             if let Err(e) = generator.compile_modules(modules) {
                 print_error_report(filename, e);
                 std::process::exit(1);
