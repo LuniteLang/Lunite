@@ -136,8 +136,8 @@ impl CodegenC {
         self.emit_line("    return res;");
         self.emit_line("}");
         self.emit_line("void lunite_print(LuniteString* s) { if(s) printf(\"%s\", s->ptr); }");
-        self.emit_line("void lunite_println(LuniteString* s) { if(s) printf(\"%s\n\", s->ptr); else printf(\"\n\"); }");
-        self.emit_line("char* lunite_int_to_string(int64_t i) {");
+        self.emit_line("void lunite_println(LuniteString* s) { if(s) printf(\"%s\\n\", s->ptr); else printf(\"\\n\"); }");
+        self.emit_line("LuniteString* lunite_int_to_string(int64_t i) {");
         self.emit_line("    char buf[32]; sprintf(buf, \"%lld\", i);");
         self.emit_line("    return lunite_new_string(buf);");
         self.emit_line("}");

@@ -1,0 +1,78 @@
+import "std/io.lun" as io
+import "std/sys.lun" as sys
+import "std/string.lun" as str
+import "std/list.lun" as list
+import "ast.lun" as ast
+import "codegen_c.lun" as codegen
+import "token.lun" as tok
+
+fn main() {
+    let argc = sys.get_argc();
+    
+    // Arg 0 is usually the program name, Arg 1 is the input file
+    // When running via 'lunite run script.lun -- args', arg 1 is '--' and arg 2 is the first real arg?
+    // Let's just print args to debug
+    
+    if (argc < 2) {
+        str.println("Usage: lunite_c <input_file>");
+        // return; // Don't exit yet to debug
+    }
+
+    let input_path = "input.lun"; 
+    if (argc >= 2) {
+        input_path = sys.get_arg(1);
+    }
+    
+    str.print("Compiling: ");
+    str.println(input_path);
+
+    // --- Hardcoded AST Construction (Simulation of Parser) ---
+    // fn main() { lunite_print("Hello from Self-Hosted Compiler!"); }
+    
+    let stmts = list.List<ast.Statement>.new(0);
+    
+    let msg = ast.Expression::String("Hello from Self-Hosted Compiler!");
+    let call_args = list.List<ast.Expression>.new(0);
+    call_args.push(msg);
+    
+    let print_func = ast.Expression::Identifier("lunite_println");
+    let call_expr = ast.Expression::Call(ast.CallExpressionPayload {
+        function: &print_func,
+        args: call_args,
+        type_args: list.List<ast.Type>.new(0)
+    });
+    
+    stmts.push(ast.Statement::Expr(call_expr));
+    
+    let zero = ast.Expression::Int(0);
+    let ret_val = ast.Option<ast.Expression>::Some(zero);
+    stmts.push(ast.Statement::Return(ret_val));
+    
+    let body = ast.Block { statements: stmts };
+    
+    let func = ast.FunctionDecl {
+        name: "main",
+        generic_params: list.List<string>.new(0),
+        params: list.List<ast.Param>.new(0),
+        return_type: ast.Type::Int,
+        body: body,
+        visibility: ast.Visibility::Public,
+        is_pure: false,
+        contract: ast.Option<ast.Expression>::None
+    };
+
+    let items = list.List<ast.Item>.new(0);
+    items.push(ast.Item::Function(func));
+    let prog = ast.Program { items: items };
+
+    // --- Codegen ---
+    let gen = codegen.CodegenC.new();
+    let code = gen.generate(prog);
+
+    str.println("--- Generated C Code ---");
+    str.println(code);
+    
+    // Write to output file
+    io.write_file_text("output.c", code);
+    str.println("Wrote to output.c");
+}
