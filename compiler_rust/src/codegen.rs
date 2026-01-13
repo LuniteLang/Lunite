@@ -965,6 +965,8 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .unwrap();
                 self.gen.builder.build_store(p_ptr, data_ptr).unwrap();
                 self.gen.builder.build_store(l_ptr, len_val).unwrap();
+                // Retain string literal once to keep it alive
+                self.emit_retain(cast.into(), &Type::String);
                 Ok(cast.into())
             }
             TExpressionKind::Identifier(n) => {

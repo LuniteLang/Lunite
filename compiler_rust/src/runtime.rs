@@ -59,6 +59,7 @@ pub extern "C" fn lunite_retain(user_ptr: *mut u8) {
     if user_ptr.is_null() {
         return;
     }
+    println!("[RUNTIME] lunite_retain({:p})", user_ptr);
     unsafe {
         let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
         (*rc_ptr).fetch_add(1, Ordering::Relaxed);
@@ -70,6 +71,7 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
     if user_ptr.is_null() {
         return;
     }
+    println!("[RUNTIME] lunite_release({:p})", user_ptr);
     unsafe {
         let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
         // fetch_sub returns the previous value
@@ -78,6 +80,7 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
             std::sync::atomic::fence(Ordering::Acquire);
             let size_ptr = user_ptr.sub(16) as *mut usize;
             let size = *size_ptr;
+            println!("[RUNTIME] lunite_free({:p}, size={})", user_ptr.sub(16), size);
             let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
             std::alloc::dealloc(user_ptr.sub(16), layout);
         }

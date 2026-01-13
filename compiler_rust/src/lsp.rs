@@ -57,7 +57,7 @@ fn check_document(connection: &Connection, uri: Url, text: &str) -> Result<(), B
     
     // 1. Lexer & Parser Check
     let mut lexer = Lexer::new(text);
-    let mut parser = Parser::new(&mut lexer);
+    let mut parser = Parser::new(lexer);
     
     match parser.parse_program() {
         Ok(_) => {

@@ -1,0 +1,3 @@
+fn main() {
+    lunite_println("Hello from Real Parser!");
+}

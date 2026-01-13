@@ -8,6 +8,8 @@ runtime_build/
 *.a
 *.so
 *.exe
+*.ll
+build_artifacts/
 
 # Logs
 *.log

@@ -118,6 +118,7 @@ impl CodegenC {
         self.emit_line("// --- Runtime ---");
         self.emit_line("typedef struct { char* ptr; size_t len; } LuniteString;");
         self.emit_line("LuniteString* lunite_new_string(const char* s) {");
+        self.emit_line("    if (!s) return NULL;");
         self.emit_line("    LuniteString* str = malloc(sizeof(LuniteString));");
         self.emit_line("    str->len = strlen(s);");
         self.emit_line("    str->ptr = malloc(str->len + 1);");
@@ -135,11 +136,33 @@ impl CodegenC {
         self.emit_line("    res->ptr[res->len] = 0;");
         self.emit_line("    return res;");
         self.emit_line("}");
-        self.emit_line("void lunite_print(LuniteString* s) { if(s) printf(\"%s\", s->ptr); }");
-        self.emit_line("void lunite_println(LuniteString* s) { if(s) printf(\"%s\\n\", s->ptr); else printf(\"\\n\"); }");
+        self.emit_line("void lunite_print(LuniteString* s) { if(s && s->ptr) printf(\"%s\", s->ptr); }");
+        self.emit_line("void lunite_println(LuniteString* s) { if(s && s->ptr) printf(\"%s\\n\", s->ptr); else printf(\"\\n\"); }");
         self.emit_line("LuniteString* lunite_int_to_string(int64_t i) {");
-        self.emit_line("    char buf[32]; sprintf(buf, \"%lld\", i);");
+        self.emit_line("    char buf[32]; sprintf(buf, \"%lld\", (long long)i);");
         self.emit_line("    return lunite_new_string(buf);");
+        self.emit_line("}");
+        self.emit_newline();
+        self.emit_line("// --- IO & Sys ---");
+        self.emit_line("static int G_ARGC; static char** G_ARGV;");
+        self.emit_line("int64_t lunite_sys_get_argc() { return G_ARGC; }");
+        self.emit_line("LuniteString* lunite_sys_get_arg(int64_t i) {");
+        self.emit_line("    if (i < 0 || i >= G_ARGC) return lunite_new_string(\"\");");
+        self.emit_line("    return lunite_new_string(G_ARGV[i]);");
+        self.emit_line("}");
+        self.emit_line("LuniteString* lunite_io_read_file_str(LuniteString* p) {");
+        self.emit_line("    if (!p || !p->ptr) return lunite_new_string(\"\");");
+        self.emit_line("    FILE* f = fopen(p->ptr, \"rb\"); if (!f) return lunite_new_string(\"\");");
+        self.emit_line("    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, SEEK_SET);");
+        self.emit_line("    char* buf = malloc(size + 1); fread(buf, 1, size, f); buf[size] = 0;");
+        self.emit_line("    fclose(f);");
+        self.emit_line("    LuniteString* res = malloc(sizeof(LuniteString)); res->ptr = buf; res->len = size;");
+        self.emit_line("    return res;");
+        self.emit_line("}");
+        self.emit_line("int64_t lunite_io_write_file(LuniteString* p, LuniteString* c) {");
+        self.emit_line("    if (!p || !p->ptr || !c || !c->ptr) return -1;");
+        self.emit_line("    FILE* f = fopen(p->ptr, \"wb\"); if (!f) return -1;");
+        self.emit_line("    fwrite(c->ptr, 1, c->len, f); fclose(f); return 0;");
         self.emit_line("}");
         self.emit_newline();
     }
@@ -180,6 +203,9 @@ impl CodegenC {
     }
 
     fn gen_function_proto(mut self: CodegenC, f: ast.FunctionDecl, struct_name: string) {
+        if (string_lib.length(struct_name) == 0) {
+            if (f.name == "main") { return; }
+        }
         let ret_type = self.gen_type(f.return_type);
         let mut name = f.name;
         if (string_lib.length(struct_name) > 0) {
@@ -582,6 +608,20 @@ impl CodegenC {
             }
             params_str = string_lib.concat(params_str, string_lib.concat(string_lib.concat(p_type, " "), p.name));
             i = i + 1;
+        }
+        
+        if (string_lib.length(struct_name) == 0) {
+            if (f.name == "main") {
+                self.emit_line("int main(int argc, char** argv) {");
+                self.indent = self.indent + 1;
+                self.emit_line("G_ARGC = argc; G_ARGV = argv;");
+                self.gen_block(f.body);
+                self.emit_line("return 0;");
+                self.indent = self.indent - 1;
+                self.emit_line("}");
+                self.emit_newline();
+                return;
+            }
         }
         
         self.emit_line(string_lib.concat(string_lib.concat(string_lib.concat(string_lib.concat(ret_type, " "), name), "("), string_lib.concat(params_str, ") {")));
