@@ -1,0 +1,9 @@
+[package]
+name = "demo_app"
+version = "1.0.0"
+
+[dependencies]
+# Dùng repo thật để test logic clone
+libc_test = { git = "https://github.com/rust-lang/libc.git" }
+# Local path
+local_lib = { path = "./std" }

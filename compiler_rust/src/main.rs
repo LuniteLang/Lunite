@@ -12,6 +12,7 @@ mod parser;
 mod runtime;
 mod semantic;
 mod token;
+mod lpm;
 
 use ast::Program;
 use codegen::CodeGenerator;
@@ -217,7 +218,34 @@ fn parse_modules(_entry_file: &str) -> (HashMap<PathBuf, Program>, HashMap<PathB
     (HashMap::new(), HashMap::new())
 }
 
-fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>, argc: i32, argv: *const *const i8) {
+fn resolve_lpm_dependencies() -> Vec<PathBuf> {
+    let manifest_path = Path::new("lunite.toml");
+    if !manifest_path.exists() {
+        return Vec::new();
+    }
+    
+    println!("[LPM] Found lunite.toml, resolving dependencies...");
+    match lpm::parse_manifest(manifest_path) {
+        Ok(m) => {
+            match m.fetch_all() {
+                Ok(paths) => paths,
+                Err(e) => {
+                    eprintln!("[LPM] Error fetching dependencies: {}", e);
+                    Vec::new()
+                }
+            }
+        },
+        Err(e) => {
+            eprintln!("[LPM] Error parsing manifest: {}", e);
+            Vec::new()
+        }
+    }
+}
+
+fn run_file(filename: &str, mut lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>, argc: i32, argv: *const *const i8) {
+    let lpm_paths = resolve_lpm_dependencies();
+    lib_paths.extend(lpm_paths);
+
     let mut analyzer = SemanticAnalyzer::new(lib_paths);
     let main_path = PathBuf::from(filename);
 
@@ -238,8 +266,11 @@ fn run_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLeve
     }
 }
 
-fn build_file(filename: &str, lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>) {
+fn build_file(filename: &str, mut lib_paths: Vec<PathBuf>, opt_level: OptimizationLevel, target: Option<String>) {
     ensure_runtime_lib();
+    
+    let lpm_paths = resolve_lpm_dependencies();
+    lib_paths.extend(lpm_paths);
 
     let args: Vec<String> = std::env::args().collect();
     let mut link_args = Vec::new();
