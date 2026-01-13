@@ -1,102 +1,170 @@
-// std/json.lun - JSON Parsing and Serialization
 import "std/string.lun" as str
+import "std/list.lun" as list
+import "std/map.lun" as map
 
 pub enum JsonValue {
     Null,
     Bool(bool),
     Number(int),
     String(string),
-    Array(*JsonArray),
-    Object(*JsonObject)
+    Array(list.List<JsonValue>),
+    Object(map.Map<string, JsonValue>)
 }
 
-pub struct JsonArray {
-    pub items: [JsonValue; 64],
+pub struct Parser {
+    pub input: string,
+    pub pos: int,
     pub len: int
 }
 
-pub struct JsonObject {
-    pub keys: [string; 32],
-    pub values: [JsonValue; 32],
-    pub len: int
+impl Parser {
+    pub fn new(s: string) -> Parser {
+        return Parser {
+            input: s,
+            pos: 0,
+            len: str.length(s)
+        };
+    }
+
+    fn peek(self: Parser) -> int {
+        if (self.pos >= self.len) { return -1; }
+        return str.char_at(self.input, self.pos);
+    }
+
+    fn advance(mut self: Parser) {
+        self.pos = self.pos + 1;
+    }
+
+    fn skip_whitespace(mut self: Parser) {
+        let loop_cond = true;
+        while (loop_cond) {
+            if (self.pos >= self.len) { return; }
+            let c = self.peek();
+            // space, \n, \r, \t
+            if (c == 32 || c == 10 || c == 13 || c == 9) {
+                self.advance();
+            } else {
+                loop_cond = false;
+            }
+        }
+    }
+
+    pub fn parse(mut self: Parser) -> JsonValue {
+        self.skip_whitespace();
+        let c = self.peek();
+        
+        if (c == 123) { // '{'
+            return self.parse_object();
+        }
+        if (c == 91) { // '['
+            return self.parse_array();
+        }
+        if (c == 34) { // '"'
+            return JsonValue::String(self.parse_string());
+        }
+        if (c == 116) { // 't'
+            self.pos = self.pos + 4; // true
+            return JsonValue::Bool(true);
+        }
+        if (c == 102) { // 'f'
+            self.pos = self.pos + 5; // false
+            return JsonValue::Bool(false);
+        }
+        if (c == 110) { // 'n'
+            self.pos = self.pos + 4; // null
+            return JsonValue::Null;
+        }
+        
+        return self.parse_number();
+    }
+
+    fn parse_string(mut self: Parser) -> string {
+        self.advance(); // skip "
+        let start = self.pos;
+        let loop_cond = true;
+        while (loop_cond) {
+            if (self.pos >= self.len) { loop_cond = false; }
+            let c = self.peek();
+            if (c == 34) { // "
+                let s = str.sub(self.input, start, self.pos);
+                self.advance();
+                return s;
+            }
+            self.advance();
+        }
+        return "";
+    }
+
+    fn parse_number(mut self: Parser) -> JsonValue {
+        let start = self.pos;
+        let mut c = self.peek();
+        if (c == 45) { // -
+            self.advance();
+            c = self.peek();
+        }
+        while (c >= 48 && c <= 57) { // 0-9
+            self.advance();
+            c = self.peek();
+        }
+        let s = str.sub(self.input, start, self.pos);
+        // TODO: parse int properly
+        return JsonValue::Number(0); 
+    }
+
+    fn parse_array(mut self: Parser) -> JsonValue {
+        self.advance(); // [
+        let arr = list.List<JsonValue>.new(0);
+        
+        let loop_cond = true;
+        while (loop_cond) {
+            self.skip_whitespace();
+            if (self.peek() == 93) { // ]
+                self.advance();
+                loop_cond = false;
+            } else {
+                let val = self.parse();
+                arr.push(val);
+                
+                self.skip_whitespace();
+                if (self.peek() == 44) { // ,
+                    self.advance();
+                }
+            }
+        }
+        return JsonValue::Array(arr);
+    }
+
+    fn parse_object(mut self: Parser) -> JsonValue {
+        self.advance(); // {
+        let obj = map.Map<string, JsonValue>.new(0);
+        
+        let loop_cond = true;
+        while (loop_cond) {
+            self.skip_whitespace();
+            if (self.peek() == 125) { // }
+                self.advance();
+                loop_cond = false;
+            } else {
+                let key = self.parse_string();
+                self.skip_whitespace();
+                if (self.peek() == 58) { // :
+                    self.advance();
+                }
+                
+                let val = self.parse();
+                obj.put(key, val);
+                
+                self.skip_whitespace();
+                if (self.peek() == 44) { // ,
+                    self.advance();
+                }
+            }
+        }
+        return JsonValue::Object(obj);
+    }
 }
 
-// Simple JSON string parser (basic implementation)
-pub fn parse_string(s: string) -> JsonValue {
-    let len = str.length(s);
-    if len == 0 {
-        return JsonValue::Null;
-    }
-    
-    let first = str.char_at(s, 0);
-    
-    // Check for null
-    if first == 110 && len >= 4 { // 'n'
-        return JsonValue::Null;
-    }
-    
-    // Check for true
-    if first == 116 && len >= 4 { // 't'
-        return JsonValue::Bool(true);
-    }
-    
-    // Check for false
-    if first == 102 && len >= 5 { // 'f'
-        return JsonValue::Bool(false);
-    }
-    
-    // Check for string (starts with ")
-    if first == 34 { // '"'
-        let inner = str.sub(s, 1, len - 1);
-        return JsonValue::String(inner);
-    }
-    
-    // Check for number (starts with digit or minus)
-    if (first >= 48 && first <= 57) || first == 45 {
-        // Simple int parsing
-        let mut val = 0;
-        let mut i = 0;
-        let mut neg = false;
-        if first == 45 {
-            neg = true;
-            i = 1;
-        }
-        while i < len {
-            let c = str.char_at(s, i);
-            if c >= 48 && c <= 57 {
-                val = val * 10 + (c - 48);
-            }
-            i = i + 1;
-        }
-        if neg {
-            val = 0 - val;
-        }
-        return JsonValue::Number(val);
-    }
-    
-    return JsonValue::Null;
-}
-
-// Serialize JsonValue to string
-pub fn stringify(v: JsonValue) -> string {
-    when v {
-        JsonValue::Null => {
-            return "null";
-        }
-        JsonValue::Bool(b) => {
-            if b {
-                return "true";
-            }
-            return "false";
-        }
-        JsonValue::Number(n) => {
-            return str.int_to_string(n);
-        }
-        JsonValue::String(s) => {
-            return str.concat(str.concat("\"", s), "\"");
-        }
-        else => {
-            return "null";
-        }
-    }
+pub fn parse(s: string) -> JsonValue {
+    let p = Parser::new(s);
+    return p.parse();
 }

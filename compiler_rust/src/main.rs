@@ -13,6 +13,7 @@ mod runtime;
 mod semantic;
 mod token;
 mod lpm;
+mod lsp;
 
 use ast::Program;
 use codegen::CodeGenerator;
@@ -381,11 +382,9 @@ fn ensure_runtime_lib() {
 }
 
 fn run_lsp() {
-    use std::io::BufRead;
-    let stdin = std::io::stdin();
-    for line in stdin.lock().lines() {
-        let line = line.unwrap();
-        eprintln!("LSP received: {}", line);
+    if let Err(e) = lsp::start_lsp() {
+        eprintln!("LSP Error: {}", e);
+        std::process::exit(1);
     }
 }
 
