@@ -21,7 +21,7 @@ use std::path::Path;
 use crate::ast::{EnumDecl, StructDecl, StructLayout, Type};
 use crate::semantic::{
     TBlock, TExpression, TExpressionKind, TExternFunctionDecl, TFunctionDecl, TItem, TModule,
-    TStatement, TWhenArm, TWhenPattern,
+    TStatement, TStatementKind, TWhenArm, TWhenPattern,
 };
 use crate::token::TokenKind;
 use crate::CompileError;
@@ -2326,8 +2326,8 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
     }
 
     fn compile_statement(&mut self, stmt: &TStatement) -> Result<(), CompileError> {
-        match stmt {
-            TStatement::Let {
+        match &stmt.kind {
+            TStatementKind::Let {
                 name,
                 var_type,
                 value,
@@ -2345,7 +2345,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 self.scope_stack.last_mut().unwrap().push(name.clone());
                 Ok(())
             }
-            TStatement::Assign { lvalue, rvalue } => {
+            TStatementKind::Assign { lvalue, rvalue } => {
                 let addr = self.compile_lvalue(lvalue)?;
                 let val = self.compile_expression(rvalue)?;
                 if self.gen.is_ref_counted(&lvalue.typ) {
@@ -2366,11 +2366,11 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 }
                 Ok(())
             }
-            TStatement::Expr(e) => {
+            TStatementKind::Expr(e) => {
                 self.compile_expression(e)?;
                 Ok(())
             }
-            TStatement::Break => {
+            TStatementKind::Break => {
                 if let Some(bb) = self.loop_exit_stack.last() {
                     self.gen.builder.build_unconditional_branch(*bb).unwrap();
                 } else {
@@ -2382,7 +2382,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 }
                 Ok(())
             }
-            TStatement::Return(oe) => {
+            TStatementKind::Return(oe) => {
                 let rv = oe
                     .as_ref()
                     .map(|e| self.compile_expression(e))
@@ -2398,7 +2398,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 }
                 Ok(())
             }
-            TStatement::If {
+            TStatementKind::If {
                 condition,
                 then_block,
                 else_block,
@@ -2440,7 +2440,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 self.gen.builder.position_at_end(merge);
                 Ok(())
             }
-            TStatement::While { condition, body } => {
+            TStatementKind::While { condition, body } => {
                 let cond_bb = self
                     .gen
                     .context
@@ -2483,11 +2483,11 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 self.gen.builder.position_at_end(end_bb);
                 Ok(())
             }
-            TStatement::Block(b) => {
+            TStatementKind::Block(b) => {
                 self.compile_block(b)?;
                 Ok(())
             }
-            TStatement::Region { body } => {
+            TStatementKind::Region { body } => {
                 let save_fn = self.gen.module.get_function("lunite_arena_save").unwrap();
                 let restore_fn = self
                     .gen
@@ -2509,7 +2509,19 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                     .unwrap();
                 Ok(())
             }
-            TStatement::Spawn(e) => {
+            TStatementKind::Throw { value } => {
+                 let val = self.compile_expression(value)?;
+                 let throw_fn = self.gen.module.get_function("lunite_throw").unwrap();
+                 let void_ptr = self.gen.builder.build_bit_cast(
+                     val.into_pointer_value(),
+                     self.gen.context.ptr_type(AddressSpace::default()),
+                     "throw_val"
+                 ).unwrap();
+                 self.gen.builder.build_call(throw_fn, &[void_ptr.into()], "").unwrap();
+                 self.gen.builder.build_unreachable().unwrap();
+                 Ok(())
+            }
+            TStatementKind::Spawn(e) => {
                 if let TExpressionKind::Call { function, args } = &e.kind {
                     let mut arg_vals = Vec::new();
                     for arg in args {
@@ -2576,7 +2588,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 }
                 Ok(())
             }
-            TStatement::TryCatch {
+            TStatementKind::TryCatch {
                 try_block,
                 catch_variable,
                 catch_block,
@@ -2584,7 +2596,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
                 self.compile_block(try_block)?;
                 Ok(())
             }
-            TStatement::When { subject, arms } => {
+            TStatementKind::When { subject, arms } => {
                 let subj_val = self.compile_expression(subject)?;
                 let end_bb = self
                     .gen

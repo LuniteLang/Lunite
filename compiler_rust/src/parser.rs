@@ -1,9 +1,10 @@
 use crate::ast::{
-    Block, EnumDecl, EnumVariant, Expression, ExternFunctionDecl, FunctionDecl, ImplDecl, Item,
-    NativeFunctionDecl, Program, Statement, StructDecl, StructLayout, Type, Visibility, WhenArm,
-    WhenPattern,
+    Block, EnumDecl, EnumVariant, Expression, ExpressionKind, ExternFunctionDecl, FunctionDecl,
+    ImplDecl, Item, NativeFunctionDecl, Program, Statement, StatementKind, StructDecl, StructLayout,
+    Type, Visibility, WhenArm, WhenPattern,
 };
 use crate::lexer::Lexer;
+use crate::span::Span;
 use crate::token::{Token, TokenKind};
 use crate::CompileError;
 
@@ -56,6 +57,7 @@ pub struct Parser<'a> {
     lexer: Lexer<'a>,
     current_token: Token,
     peek_token: Token,
+    prev_span: Span,
 }
 
 impl<'a> Parser<'a> {
@@ -66,10 +68,12 @@ impl<'a> Parser<'a> {
             lexer,
             current_token,
             peek_token,
+            prev_span: Span::default(),
         }
     }
 
     fn next_token(&mut self) {
+        self.prev_span = self.current_token.span;
         self.current_token = self.peek_token.clone();
         self.peek_token = self.lexer.next_token();
     }
@@ -84,8 +88,8 @@ impl<'a> Parser<'a> {
     fn cur_error(&self, msg: &str) -> CompileError {
         CompileError {
             message: msg.to_string(),
-            line: self.current_token.line,
-            column: self.current_token.column,
+            line: self.current_token.span.line as usize,
+            column: self.current_token.span.col as usize,
         }
     }
 
@@ -95,12 +99,12 @@ impl<'a> Parser<'a> {
         } else {
             let msg = format!(
                 "Expected identifier, got {:?} at line {}, col {}",
-                self.current_token.kind, self.current_token.line, self.current_token.column
+                self.current_token.kind, self.current_token.span.line, self.current_token.span.col
             );
             Err(CompileError {
                 message: msg,
-                line: self.current_token.line,
-                column: self.current_token.column,
+                line: self.current_token.span.line as usize,
+                column: self.current_token.span.col as usize,
             })
         }
     }
@@ -111,8 +115,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn mk_expr(&self, kind: ExpressionKind, start: Span, end: Span) -> Expression {
+        Expression {
+            kind,
+            typ: Type::Null,
+            span: start.merge(end),
+        }
+    }
+
+    fn mk_stmt(&self, kind: StatementKind, start: Span, end: Span) -> Statement {
+        Statement {
+            kind,
+            span: start.merge(end),
+        }
+    }
+
     pub fn parse_program(&mut self) -> Result<Program, CompileError> {
         let mut items = Vec::new();
+        let start_span = self.current_token.span;
         while !self.cur_is(&TokenKind::Eof) {
             self.skip_newlines();
             if self.cur_is(&TokenKind::Eof) {
@@ -122,13 +142,14 @@ impl<'a> Parser<'a> {
             if self.cur_is(&TokenKind::Eof) {
                 break;
             }
-            self.next_token(); // move past the item
+            // self.next_token(); // parse_item consumes
             self.skip_newlines();
         }
-        Ok(Program { items })
+        Ok(Program { items, span: start_span.merge(self.prev_span) })
     }
 
     fn parse_item(&mut self) -> Result<Item, CompileError> {
+        let start_span = self.current_token.span;
         let mut visibility = Visibility::Private;
         if self.cur_is(&TokenKind::TokPub) {
             visibility = Visibility::Public;
@@ -144,17 +165,17 @@ impl<'a> Parser<'a> {
         self.skip_newlines();
 
         match self.current_token.kind {
-            TokenKind::TokImport => self.parse_import_statement(),
-            TokenKind::TokExtern => Ok(Item::ExternFunction(self.parse_extern_function_decl()?)),
+            TokenKind::TokImport => self.parse_import_statement(start_span),
+            TokenKind::TokExtern => Ok(Item::ExternFunction(self.parse_extern_function_decl(start_span)?)),
             TokenKind::TokNative => Ok(Item::NativeFunction(
-                self.parse_native_function_decl(visibility)?,
+                self.parse_native_function_decl(visibility, start_span)?,
             )),
             TokenKind::TokFn => Ok(Item::Function(
-                self.parse_function_decl(visibility, is_pure)?,
+                self.parse_function_decl(visibility, is_pure, start_span)?,
             )),
-            TokenKind::TokStruct => Ok(Item::Struct(self.parse_struct_decl(visibility)?)),
-            TokenKind::TokEnum => Ok(Item::Enum(self.parse_enum_decl(visibility)?)),
-            TokenKind::TokImpl => self.parse_impl_item(),
+            TokenKind::TokStruct => Ok(Item::Struct(self.parse_struct_decl(visibility, start_span)?)),
+            TokenKind::TokEnum => Ok(Item::Enum(self.parse_enum_decl(visibility, start_span)?)),
+            TokenKind::TokImpl => self.parse_impl_item(start_span),
             _ => Err(self.cur_error(&format!(
                 "Expected declaration, got {:?}",
                 self.current_token.kind
@@ -162,7 +183,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_extern_function_decl(&mut self) -> Result<ExternFunctionDecl, CompileError> {
+    fn parse_extern_function_decl(&mut self, start_span: Span) -> Result<ExternFunctionDecl, CompileError> {
         self.next_token(); // extern
         if !self.cur_is(&TokenKind::TokFn) {
             return Err(self.cur_error("Expected 'fn' after 'extern'"));
@@ -199,10 +220,11 @@ impl<'a> Parser<'a> {
             generic_params,
             params,
             return_type,
+            span: start_span.merge(self.prev_span),
         })
     }
 
-    fn parse_enum_decl(&mut self, visibility: Visibility) -> Result<EnumDecl, CompileError> {
+    fn parse_enum_decl(&mut self, visibility: Visibility, start_span: Span) -> Result<EnumDecl, CompileError> {
         self.next_token(); // enum
         let name = self.expect_identifier_string()?;
         self.next_token();
@@ -230,7 +252,8 @@ impl<'a> Parser<'a> {
             if self.cur_is(&TokenKind::RBrace) {
                 break;
             }
-
+            
+            let v_start = self.current_token.span;
             let v_name = self.expect_identifier_string()?;
             self.next_token();
 
@@ -248,6 +271,7 @@ impl<'a> Parser<'a> {
             variants.push(EnumVariant {
                 name: v_name,
                 typ: v_type,
+                span: v_start.merge(self.prev_span),
             });
 
             if self.cur_is(&TokenKind::Comma) {
@@ -259,17 +283,21 @@ impl<'a> Parser<'a> {
         if !self.cur_is(&TokenKind::RBrace) {
             return Err(self.cur_error("Expected '}'"));
         }
+        let end_span = self.current_token.span;
+        self.next_token(); // consume }
         Ok(EnumDecl {
             name,
             generic_params,
             variants,
             visibility,
+            span: start_span.merge(end_span),
         })
     }
 
     fn parse_native_function_decl(
         &mut self,
         visibility: Visibility,
+        start_span: Span,
     ) -> Result<NativeFunctionDecl, CompileError> {
         self.next_token(); // native
         if !self.cur_is(&TokenKind::TokFn) {
@@ -308,27 +336,29 @@ impl<'a> Parser<'a> {
             params,
             return_type,
             visibility,
+            span: start_span.merge(self.prev_span),
         })
     }
 
-    fn parse_import_statement(&mut self) -> Result<Item, CompileError> {
+    fn parse_import_statement(&mut self, start_span: Span) -> Result<Item, CompileError> {
         self.next_token(); // import
         let path = if let TokenKind::StringLiteral(s) = self.current_token.kind.clone() {
             s
         } else {
             return Err(self.cur_error("Expected string for path"));
         };
+        self.next_token(); // consume string
 
         let mut alias = None;
-        if self.peek_is(&TokenKind::TokAs) {
-            self.next_token(); // string -> as
-            self.next_token(); // as -> identifier
+        if self.cur_is(&TokenKind::TokAs) {
+            self.next_token(); // as
             alias = Some(self.expect_identifier_string()?);
+            self.next_token(); // identifier
         }
-        Ok(Item::Import { path, alias })
+        Ok(Item::Import { path, alias, span: start_span.merge(self.prev_span) })
     }
 
-    fn parse_struct_decl(&mut self, visibility: Visibility) -> Result<StructDecl, CompileError> {
+    fn parse_struct_decl(&mut self, visibility: Visibility, start_span: Span) -> Result<StructDecl, CompileError> {
         self.next_token(); // struct
         let name = self.expect_identifier_string()?;
         self.next_token();
@@ -373,19 +403,22 @@ impl<'a> Parser<'a> {
             }
             self.skip_newlines();
         }
-        if self.cur_is(&TokenKind::RBrace) {
-            // STOP ON '}'
+        if !self.cur_is(&TokenKind::RBrace) {
+            return Err(self.cur_error("Expected '}'"));
         }
+        let end_span = self.current_token.span;
+        self.next_token(); // consume }
         Ok(StructDecl {
             name,
             generic_params,
             fields,
             visibility,
             layout: StructLayout::Aos,
+            span: start_span.merge(end_span),
         })
     }
 
-    fn parse_impl_item(&mut self) -> Result<Item, CompileError> {
+    fn parse_impl_item(&mut self, start_span: Span) -> Result<Item, CompileError> {
         self.next_token(); // impl
         let generic_params = if self.cur_is(&TokenKind::Less) {
             let gp = self.parse_generic_params()?;
@@ -420,6 +453,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let mut vis = Visibility::Private;
+            let m_start = self.current_token.span;
             if self.cur_is(&TokenKind::TokPub) {
                 vis = Visibility::Public;
                 self.next_token();
@@ -433,17 +467,20 @@ impl<'a> Parser<'a> {
             if !self.cur_is(&TokenKind::TokFn) {
                 return Err(self.cur_error("Expected fn"));
             }
-            methods.push(self.parse_function_decl(vis, is_p)?);
-            self.next_token(); // move past blocks '}'
+            methods.push(self.parse_function_decl(vis, is_p, m_start)?);
+            // parse_function_decl consumes body which ends with }
             self.skip_newlines();
         }
-        if self.cur_is(&TokenKind::RBrace) {
-            // STOP ON '}'
+        if !self.cur_is(&TokenKind::RBrace) {
+            return Err(self.cur_error("Expected '}'"));
         }
+        let end_span = self.current_token.span;
+        self.next_token(); // consume }
         Ok(Item::Impl(ImplDecl {
             struct_name,
             generic_params,
             methods,
+            span: start_span.merge(end_span),
         }))
     }
 
@@ -451,6 +488,7 @@ impl<'a> Parser<'a> {
         &mut self,
         visibility: Visibility,
         is_pure: bool,
+        start_span: Span,
     ) -> Result<FunctionDecl, CompileError> {
         self.next_token(); // fn
         let name = self.expect_identifier_string()?;
@@ -481,6 +519,7 @@ impl<'a> Parser<'a> {
         };
         self.skip_newlines();
         let body = self.parse_block()?;
+        let end_span = body.span;
         Ok(FunctionDecl {
             name,
             generic_params,
@@ -490,6 +529,7 @@ impl<'a> Parser<'a> {
             visibility,
             is_pure,
             contract: None,
+            span: start_span.merge(end_span),
         })
     }
 
@@ -521,6 +561,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_block(&mut self) -> Result<Block, CompileError> {
+        let start_span = self.current_token.span;
         if !self.cur_is(&TokenKind::LBrace) {
             return Err(self.cur_error("Expected '{'"));
         }
@@ -532,14 +573,15 @@ impl<'a> Parser<'a> {
                 break;
             }
             stmts.push(self.parse_statement()?);
-            self.next_token(); // ALWAYS move past the last token of the statement
+            // self.next_token(); // Statement parsing usually consumes enough
             self.skip_newlines();
         }
         if !self.cur_is(&TokenKind::RBrace) {
             return Err(self.cur_error("Expected '}'"));
         }
-        // Ends ON '}'
-        Ok(Block { statements: stmts })
+        let end_span = self.current_token.span;
+        self.next_token(); // consume }
+        Ok(Block { statements: stmts, span: start_span.merge(end_span) })
     }
 
     fn parse_statement(&mut self) -> Result<Statement, CompileError> {
@@ -556,8 +598,9 @@ impl<'a> Parser<'a> {
             return self.parse_while_statement();
         }
         if self.cur_is(&TokenKind::TokBreak) {
+            let start = self.current_token.span;
             self.next_token();
-            return Ok(Statement::Break);
+            return Ok(self.mk_stmt(StatementKind::Break, start, start));
         }
         if self.cur_is(&TokenKind::TokTry) {
             return self.parse_try_catch_statement();
@@ -578,25 +621,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_spawn_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // spawn
         let expr = self.parse_expression(Precedence::Lowest)?;
-        Ok(Statement::Spawn(expr))
+        let end = expr.span;
+        Ok(self.mk_stmt(StatementKind::Spawn(expr), start, end))
     }
 
     fn parse_region_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // region
         let body = self.parse_block()?;
-        Ok(Statement::Region { body })
+        let end = body.span;
+        Ok(self.mk_stmt(StatementKind::Region { body }, start, end))
     }
 
     fn parse_when_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // when
         if !self.cur_is(&TokenKind::LParen) {
             return Err(self.cur_error("Expected '(' after when"));
         }
         self.next_token(); // (
         let subject = self.parse_expression(Precedence::Lowest)?;
-        self.next_token(); // move past subject
+        // self.next_token(); // parse_expression consumes
         if !self.cur_is(&TokenKind::RParen) {
             return Err(self.cur_error("Expected ')' after when subject"));
         }
@@ -613,23 +661,24 @@ impl<'a> Parser<'a> {
                 break;
             }
             let pattern = self.parse_when_pattern()?;
-            self.next_token(); // move to =>
+            // self.next_token(); // move to => (pattern consumes)
             if !self.cur_is(&TokenKind::FatArrow) {
                 return Err(self.cur_error("Expected '=>' after pattern"));
             }
             self.next_token(); // =>
             let body = if self.cur_is(&TokenKind::LBrace) {
-                let b = self.parse_block()?;
-                self.next_token();
-                b
+                self.parse_block()?
             } else {
                 let expr = self.parse_expression(Precedence::Lowest)?;
-                self.next_token();
+                // self.next_token();
+                let sp = expr.span;
                 Block {
-                    statements: vec![Statement::Expr(expr)],
+                    statements: vec![self.mk_stmt(StatementKind::Expr(expr), sp, sp)],
+                    span: sp,
                 }
             };
-            arms.push(WhenArm { pattern, body });
+            let end_arm = body.span;
+            arms.push(WhenArm { pattern, body, span: end_arm /* approx */ });
             if self.cur_is(&TokenKind::Comma) {
                 self.next_token();
             }
@@ -638,11 +687,14 @@ impl<'a> Parser<'a> {
         if !self.cur_is(&TokenKind::RBrace) {
             return Err(self.cur_error("Expected '}'"));
         }
-        Ok(Statement::When { subject, arms })
+        let end = self.current_token.span;
+        self.next_token(); // }
+        Ok(self.mk_stmt(StatementKind::When { subject, arms }, start, end))
     }
 
     fn parse_when_pattern(&mut self) -> Result<WhenPattern, CompileError> {
         if self.cur_is(&TokenKind::TokElse) {
+            self.next_token();
             return Ok(WhenPattern::Else);
         }
         let mut current_name = String::new();
@@ -678,11 +730,12 @@ impl<'a> Parser<'a> {
                     self.next_token(); // consume '::'
                     let variant_name = self.expect_identifier_string()?;
                     let mut binding = None;
-                    if self.peek_is(&TokenKind::LParen) {
-                        self.next_token();
+                    self.next_token();
+                    if self.cur_is(&TokenKind::LParen) {
                         self.next_token();
                         binding = Some(self.expect_identifier_string()?);
-                        if !self.peek_is(&TokenKind::RParen) {
+                        self.next_token();
+                        if !self.cur_is(&TokenKind::RParen) {
                             return Err(self.cur_error("Expected ')'"));
                         }
                         self.next_token();
@@ -700,6 +753,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_let_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // let
         let is_m = if self.cur_is(&TokenKind::TokMut) {
             self.next_token();
@@ -722,20 +776,23 @@ impl<'a> Parser<'a> {
             self.next_token();
             val = Some(self.parse_expression(Precedence::Lowest)?);
         }
-        Ok(Statement::Let {
+        let end = val.as_ref().map(|e| e.span).unwrap_or(self.prev_span);
+        Ok(self.mk_stmt(StatementKind::Let {
             name,
             is_mutable: is_m,
             type_name,
             value: val,
-        })
+        }, start, end))
     }
 
     fn parse_if_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // if
         let c = self.parse_expression(Precedence::Lowest)?;
-        self.next_token();
+        // self.next_token();
         let t = self.parse_block()?;
         let mut e = None;
+        let mut end = t.span;
         while self.peek_is(&TokenKind::Newline) {
             self.next_token();
         }
@@ -743,35 +800,43 @@ impl<'a> Parser<'a> {
             self.next_token();
             self.next_token();
             if self.cur_is(&TokenKind::TokIf) {
+                let else_stmt = self.parse_if_statement()?;
+                end = else_stmt.span;
                 e = Some(Block {
-                    statements: vec![self.parse_if_statement()?],
+                    statements: vec![else_stmt],
+                    span: end,
                 });
             } else {
-                e = Some(self.parse_block()?);
+                let blk = self.parse_block()?;
+                end = blk.span;
+                e = Some(blk);
             }
         }
-        Ok(Statement::If {
+        Ok(self.mk_stmt(StatementKind::If {
             condition: c,
             then_branch: t,
             else_branch: e,
-        })
+        }, start, end))
     }
 
     fn parse_while_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // while
         let c = self.parse_expression(Precedence::Lowest)?;
-        self.next_token();
+        // self.next_token();
         let b = self.parse_block()?;
-        Ok(Statement::While {
+        let end = b.span;
+        Ok(self.mk_stmt(StatementKind::While {
             condition: c,
             body: b,
-        })
+        }, start, end))
     }
 
     fn parse_try_catch_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // try
         let t = self.parse_block()?;
-        self.next_token();
+        // self.next_token();
         self.skip_newlines();
         if !self.cur_is(&TokenKind::TokCatch) {
             return Err(self.cur_error("Expected catch"));
@@ -780,43 +845,47 @@ impl<'a> Parser<'a> {
         let v = self.expect_identifier_string()?;
         self.next_token();
         let c = self.parse_block()?;
-        Ok(Statement::TryCatch {
+        let end = c.span;
+        Ok(self.mk_stmt(StatementKind::TryCatch {
             try_block: t,
             catch_variable: v,
             catch_block: c,
-        })
+        }, start, end))
     }
 
     fn parse_throw_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // throw
         let v = self.parse_expression(Precedence::Lowest)?;
-        Ok(Statement::Throw { value: v })
+        Ok(self.mk_stmt(StatementKind::Throw { value: v.clone() }, start, v.span))
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, CompileError> {
+        let start = self.current_token.span;
         self.next_token(); // return
         if self.cur_is(&TokenKind::Newline)
             || self.cur_is(&TokenKind::RBrace)
             || self.cur_is(&TokenKind::Semicolon)
         {
-            return Ok(Statement::Return(None));
+            return Ok(self.mk_stmt(StatementKind::Return(None), start, start));
         }
         let v = self.parse_expression(Precedence::Lowest)?;
-        Ok(Statement::Return(Some(v)))
+        Ok(self.mk_stmt(StatementKind::Return(Some(v.clone())), start, v.span))
     }
 
     fn parse_expression_statement(&mut self) -> Result<Statement, CompileError> {
         let l = self.parse_expression(Precedence::Lowest)?;
         if self.peek_is(&TokenKind::Equal) {
-            self.next_token();
-            self.next_token();
+            self.next_token(); // expr -> equal
+            self.next_token(); // equal -> rvalue
             let r = self.parse_expression(Precedence::Lowest)?;
-            Ok(Statement::Assign {
-                lvalue: l,
+            let end = r.span;
+            Ok(self.mk_stmt(StatementKind::Assign {
+                lvalue: l.clone(),
                 value: r,
-            })
+            }, l.span, end))
         } else {
-            Ok(Statement::Expr(l))
+            Ok(self.mk_stmt(StatementKind::Expr(l.clone()), l.span, l.span))
         }
     }
 
@@ -909,21 +978,24 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_prefix(&mut self) -> Result<Expression, CompileError> {
+        let start = self.current_token.span;
         match &self.current_token.kind {
-            TokenKind::IntLiteral(n) => Ok(Expression::Int(*n)),
-            TokenKind::FloatLiteral(n) => Ok(Expression::Float(*n)),
-            TokenKind::StringLiteral(s) => Ok(Expression::String(s.clone())),
-            TokenKind::TokTrue => Ok(Expression::Boolean(true)),
-            TokenKind::TokFalse => Ok(Expression::Boolean(false)),
-            TokenKind::TokNull => Ok(Expression::Null),
+            TokenKind::IntLiteral(n) => Ok(self.mk_expr(ExpressionKind::Int(*n), start, start)),
+            TokenKind::FloatLiteral(n) => Ok(self.mk_expr(ExpressionKind::Float(*n), start, start)),
+            TokenKind::StringLiteral(s) => Ok(self.mk_expr(ExpressionKind::String(s.clone()), start, start)),
+            TokenKind::TokTrue => Ok(self.mk_expr(ExpressionKind::Boolean(true), start, start)),
+            TokenKind::TokFalse => Ok(self.mk_expr(ExpressionKind::Boolean(false), start, start)),
+            TokenKind::TokNull => Ok(self.mk_expr(ExpressionKind::Null, start, start)),
             TokenKind::Identifier(_) => self.parse_identifier(),
             TokenKind::Minus | TokenKind::Bang | TokenKind::Ampersand | TokenKind::Star => {
                 let op = self.current_token.kind.clone();
                 self.next_token();
-                Ok(Expression::Unary {
+                let right = self.parse_expression(Precedence::Prefix)?;
+                let end = right.span;
+                Ok(self.mk_expr(ExpressionKind::Unary {
                     operator: op,
-                    right: Box::new(self.parse_expression(Precedence::Prefix)?),
-                })
+                    right: Box::new(right),
+                }, start, end))
             }
             TokenKind::LParen => {
                 self.next_token();
@@ -937,7 +1009,8 @@ impl<'a> Parser<'a> {
             TokenKind::TokComptime => {
                 self.next_token();
                 let body = self.parse_block()?;
-                Ok(Expression::Comptime { body })
+                let end = body.span;
+                Ok(self.mk_expr(ExpressionKind::Comptime { body }, start, end))
             }
             TokenKind::TokSizeof => {
                 self.next_token();
@@ -950,15 +1023,16 @@ impl<'a> Parser<'a> {
                 if !self.cur_is(&TokenKind::RParen) {
                     return Err(self.cur_error("Expected ')'"));
                 }
-                Ok(Expression::Sizeof(typ))
+                Ok(self.mk_expr(ExpressionKind::Sizeof(typ), start, self.current_token.span))
             }
             _ => Err(self.cur_error(&format!("No prefix for {:?}", self.current_token.kind))),
         }
     }
 
     fn parse_identifier(&mut self) -> Result<Expression, CompileError> {
+        let start = self.current_token.span;
         let n = self.expect_identifier_string()?;
-        let mut expr = Expression::Identifier(n.clone());
+        let mut expr = self.mk_expr(ExpressionKind::Identifier(n.clone()), start, start);
         let mut current_path = n.clone();
 
         if self.peek_is(&TokenKind::Less) {
@@ -968,10 +1042,10 @@ impl<'a> Parser<'a> {
                 checkpoint.next_token(); // Move to '>'
                 if checkpoint.cur_is(&TokenKind::Greater) {
                     *self = checkpoint;
-                    expr = Expression::GenericSpecialization {
-                        expression: Box::new(expr),
+                    expr = self.mk_expr(ExpressionKind::GenericSpecialization {
+                        expression: Box::new(expr.clone()),
                         type_args: args,
-                    };
+                    }, start, self.current_token.span);
                 }
             }
         }
@@ -981,10 +1055,10 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 self.next_token();
                 let f = self.expect_identifier_string()?;
-                expr = Expression::MemberAccess {
-                    object: Box::new(expr),
+                expr = self.mk_expr(ExpressionKind::MemberAccess {
+                    object: Box::new(expr.clone()),
                     field: f.clone(),
-                };
+                }, start, self.current_token.span);
                 current_path.push('.');
                 current_path.push_str(&f);
 
@@ -995,10 +1069,10 @@ impl<'a> Parser<'a> {
                         checkpoint.next_token(); // Move to '>'
                         if checkpoint.cur_is(&TokenKind::Greater) {
                             *self = checkpoint;
-                            expr = Expression::GenericSpecialization {
-                                expression: Box::new(expr),
+                            expr = self.mk_expr(ExpressionKind::GenericSpecialization {
+                                expression: Box::new(expr.clone()),
                                 type_args: args,
-                            };
+                            }, start, self.current_token.span);
                         }
                     }
                 }
@@ -1008,10 +1082,10 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 self.next_token();
                 let f = self.expect_identifier_string()?;
-                expr = Expression::MemberAccess {
-                    object: Box::new(expr),
+                expr = self.mk_expr(ExpressionKind::MemberAccess {
+                    object: Box::new(expr.clone()),
                     field: f.clone(),
-                };
+                }, start, self.current_token.span);
                 current_path.push(':');
                 current_path.push(':');
                 current_path.push_str(&f);
@@ -1027,16 +1101,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_struct_init(&mut self, expr: Expression) -> Result<Expression, CompileError> {
-        let (name, t_args) = match expr {
-            Expression::Identifier(n) => (n, vec![]),
-            Expression::MemberAccess { .. } => (self.expr_to_string(&expr)?, vec![]),
-            Expression::GenericSpecialization {
+        let start = expr.span;
+        let (name, t_args) = match expr.kind {
+            ExpressionKind::Identifier(n) => (n, vec![]),
+            ExpressionKind::MemberAccess { .. } => (self.expr_to_string(&expr)?, vec![]),
+            ExpressionKind::GenericSpecialization {
                 expression,
                 type_args,
             } => {
-                let n = match *expression {
-                    Expression::Identifier(n) => n,
-                    Expression::MemberAccess { .. } => self.expr_to_string(&expression)?,
+                let n = match (*expression).kind {
+                    ExpressionKind::Identifier(n) => n,
+                    ExpressionKind::MemberAccess { .. } => self.expr_to_string(&expression)?,
                     _ => return Err(self.cur_error("Invalid generic struct init")),
                 };
                 (n, type_args)
@@ -1065,17 +1140,18 @@ impl<'a> Parser<'a> {
             }
             self.skip_newlines();
         }
-        Ok(Expression::StructInit {
+        let end = self.current_token.span;
+        Ok(self.mk_expr(ExpressionKind::StructInit {
             name,
             fields,
             type_args: t_args,
-        })
+        }, start, end))
     }
 
     fn expr_to_string(&self, expr: &Expression) -> Result<String, CompileError> {
-        match expr {
-            Expression::Identifier(n) => Ok(n.clone()),
-            Expression::MemberAccess { object, field } => {
+        match &expr.kind {
+            ExpressionKind::Identifier(n) => Ok(n.clone()),
+            ExpressionKind::MemberAccess { object, field } => {
                 let base = self.expr_to_string(object)?;
                 Ok(format!("{}.{}", base, field))
             }
@@ -1086,6 +1162,7 @@ impl<'a> Parser<'a> {
     fn parse_infix(&mut self, left: Expression) -> Result<Expression, CompileError> {
         let op = self.current_token.kind.clone();
         let pr = precedence_of(&op);
+        let start = left.span;
         match op {
             TokenKind::Plus
             | TokenKind::Minus
@@ -1106,11 +1183,13 @@ impl<'a> Parser<'a> {
             | TokenKind::PipePipe
             | TokenKind::Caret => {
                 self.next_token();
-                Ok(Expression::Binary {
+                let right = self.parse_expression(pr)?;
+                let end = right.span;
+                Ok(self.mk_expr(ExpressionKind::Binary {
                     left: Box::new(left),
                     operator: op,
-                    right: Box::new(self.parse_expression(pr)?),
-                })
+                    right: Box::new(right),
+                }, start, end))
             }
             TokenKind::LParen => {
                 let mut args = Vec::new();
@@ -1129,19 +1208,21 @@ impl<'a> Parser<'a> {
                 if !self.cur_is(&TokenKind::RParen) {
                     return Err(self.cur_error("Expected )"));
                 }
-                Ok(Expression::Call {
+                let end = self.current_token.span;
+                Ok(self.mk_expr(ExpressionKind::Call {
                     function: Box::new(left),
                     args,
                     type_args: vec![],
-                })
+                }, start, end))
             }
             TokenKind::Dot | TokenKind::ColonColon => {
                 self.next_token();
                 let f = self.expect_identifier_string()?;
-                Ok(Expression::MemberAccess {
+                let end = self.current_token.span;
+                Ok(self.mk_expr(ExpressionKind::MemberAccess {
                     object: Box::new(left),
                     field: f,
-                })
+                }, start, end))
             }
             TokenKind::LBracket => {
                 self.next_token();
@@ -1150,22 +1231,28 @@ impl<'a> Parser<'a> {
                 if !self.cur_is(&TokenKind::RBracket) {
                     return Err(self.cur_error("Expected ']'"));
                 }
-                Ok(Expression::Index {
+                let end = self.current_token.span;
+                Ok(self.mk_expr(ExpressionKind::Index {
                     left: Box::new(left),
                     index: Box::new(index),
-                })
+                }, start, end))
             }
             TokenKind::TokAs => {
                 self.next_token();
                 let target_type = self.parse_type()?;
-                Ok(Expression::Cast {
+                // target_type doesn't have span yet, using current token
+                let end = self.current_token.span; 
+                Ok(self.mk_expr(ExpressionKind::Cast {
                     expression: Box::new(left),
                     target_type,
-                })
+                }, start, end))
             }
-            TokenKind::Question => Ok(Expression::Try {
-                expression: Box::new(left),
-            }),
+            TokenKind::Question => {
+                let end = self.current_token.span;
+                Ok(self.mk_expr(ExpressionKind::Try {
+                    expression: Box::new(left),
+                }, start, end))
+            }
             _ => Err(self.cur_error("No infix")),
         }
     }

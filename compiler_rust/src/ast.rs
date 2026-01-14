@@ -1,4 +1,5 @@
 use crate::token::TokenKind;
+use crate::span::Span;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Visibility {
@@ -26,6 +27,7 @@ pub enum Type {
 #[derive(Debug, Clone)]
 pub struct Program {
     pub items: Vec<Item>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,10 +35,12 @@ pub enum Item {
     Use {
         path: Vec<String>,
         alias: Option<String>,
+        span: Span,
     },
     Import {
         path: String,
         alias: Option<String>,
+        span: Span,
     },
     Function(FunctionDecl),
     NativeFunction(NativeFunctionDecl),
@@ -51,6 +55,7 @@ pub struct ImplDecl {
     pub struct_name: String,
     pub generic_params: Vec<String>,
     pub methods: Vec<FunctionDecl>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +65,7 @@ pub struct NativeFunctionDecl {
     pub params: Vec<(String, Type, bool)>,
     pub return_type: Type,
     pub visibility: Visibility,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +74,7 @@ pub struct ExternFunctionDecl {
     pub generic_params: Vec<String>,
     pub params: Vec<(String, Type, bool)>,
     pub return_type: Type,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +90,7 @@ pub struct StructDecl {
     pub fields: Vec<(String, Type, Visibility)>,
     pub visibility: Visibility,
     pub layout: StructLayout,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,12 +99,14 @@ pub struct EnumDecl {
     pub generic_params: Vec<String>,
     pub variants: Vec<EnumVariant>,
     pub visibility: Visibility,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumVariant {
     pub name: String,
     pub typ: Option<Type>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,15 +119,23 @@ pub struct FunctionDecl {
     pub visibility: Visibility,
     pub is_pure: bool,
     pub contract: Option<Expression>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub statements: Vec<Statement>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
+pub struct Statement {
+    pub kind: StatementKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StatementKind {
     Let {
         name: String,
         is_mutable: bool,
@@ -169,6 +187,7 @@ pub enum Statement {
 pub struct WhenArm {
     pub pattern: WhenPattern,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -184,7 +203,14 @@ pub enum WhenPattern {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub typ: Type, // Type resolution fills this
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpressionKind {
     Int(i64),
     Float(f64),
     String(String),
@@ -250,11 +276,11 @@ pub enum Expression {
 
 impl Expression {
     pub fn is_lvalue(&self) -> bool {
-        match self {
-            Expression::Identifier(_)
-            | Expression::MemberAccess { .. }
-            | Expression::Index { .. } => true,
-            Expression::Unary { operator, .. } => matches!(operator, TokenKind::Star),
+        match &self.kind {
+            ExpressionKind::Identifier(_)
+            | ExpressionKind::MemberAccess { .. }
+            | ExpressionKind::Index { .. } => true,
+            ExpressionKind::Unary { operator, .. } => matches!(operator, TokenKind::Star),
             _ => false,
         }
     }

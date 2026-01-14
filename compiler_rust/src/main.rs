@@ -12,6 +12,7 @@ mod parser;
 mod runtime;
 mod semantic;
 mod token;
+mod span;
 mod lpm;
 mod lsp;
 

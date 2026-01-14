@@ -77,14 +77,14 @@ impl Interpreter {
     }
 
     fn eval_statement(&mut self, stmt: &TStatement) -> Result<Option<Value>, String> {
-        match stmt {
-            TStatement::Expr(expr) => { self.eval_expression(expr)?; Ok(None) }
-            TStatement::Let { name, value, .. } => {
+        match &stmt.kind {
+            TStatementKind::Expr(expr) => { self.eval_expression(expr)?; Ok(None) }
+            TStatementKind::Let { name, value, .. } => {
                 let val = if let Some(e) = value { self.eval_expression(e)? } else { Value::Void };
                 self.define_var(name, val);
                 Ok(None)
             },
-            TStatement::Assign { lvalue, rvalue } => {
+            TStatementKind::Assign { lvalue, rvalue } => {
                 if let TExpressionKind::Identifier(name) = &lvalue.kind {
                     let val = self.eval_expression(rvalue)?;
                     self.set_var(name, val)?;
@@ -92,12 +92,12 @@ impl Interpreter {
                 } else {
                     Err("Comptime assign only supports simple identifiers".to_string())
                 }
-            }
-            TStatement::Return(opt_expr) => {
+            },
+            TStatementKind::Return(opt_expr) => {
                 let val = if let Some(e) = opt_expr { self.eval_expression(e)? } else { Value::Void };
                 Ok(Some(val))
             }
-            TStatement::If { condition, then_block, else_block } => {
+            TStatementKind::If { condition, then_block, else_block } => {
                 let cond_val = self.eval_expression(condition)?;
                 if cond_val.is_truthy() {
                     self.eval_block(then_block)
@@ -107,7 +107,7 @@ impl Interpreter {
                     Ok(None)
                 }
             }
-            TStatement::While { condition, body } => {
+            TStatementKind::While { condition, body } => {
                 while self.eval_expression(condition)?.is_truthy() {
                     if let Some(ret) = self.eval_block(body)? {
                         return Ok(Some(ret));
@@ -115,7 +115,7 @@ impl Interpreter {
                 }
                 Ok(None)
             }
-            TStatement::Block(b) => self.eval_block(b),
+            TStatementKind::Block(b) => self.eval_block(b),
             _ => Err("Statement not supported in comptime".to_string())
         }
     }

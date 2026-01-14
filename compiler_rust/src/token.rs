@@ -1,3 +1,5 @@
+use crate::span::Span;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Illegal,
@@ -95,6 +97,6 @@ pub enum TokenKind {
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    pub line: usize,
-    pub column: usize,
+    pub span: Span,
 }
+

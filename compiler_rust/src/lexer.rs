@@ -1,4 +1,5 @@
 use crate::token::{Token, TokenKind};
+use crate::span::Span;
 
 #[derive(Clone)]
 pub struct Lexer<'a> {
@@ -6,8 +7,8 @@ pub struct Lexer<'a> {
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     current_char: Option<char>,
     current_pos: usize,
-    line: usize,
-    column: usize,
+    line: u32,
+    column: u32,
 }
 
 impl<'a> Lexer<'a> {
@@ -27,13 +28,13 @@ impl<'a> Lexer<'a> {
     fn advance(&mut self) -> Option<char> {
         let c = self.current_char;
         if let Some(c) = c {
+            self.current_pos += c.len_utf8();
             if c == '\n' {
                 self.line += 1;
                 self.column = 1;
             } else {
                 self.column += 1;
             }
-            self.current_pos += c.len_utf8();
         }
         self.current_char = self.chars.next().map(|(_, c)| c);
         c
@@ -45,7 +46,7 @@ impl<'a> Lexer<'a> {
 
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek() {
-            if c.is_whitespace() && c != '\n' {
+            if c.is_whitespace() {
                 self.advance();
             } else if c == '/' {
                 let mut chars_clone = self.chars.clone();
@@ -84,14 +85,21 @@ impl<'a> Lexer<'a> {
 
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
-        let start_col = self.column;
+        let start_pos = self.current_pos;
         let start_line = self.line;
+        let start_col = self.column;
 
         let kind = match self.peek() {
             Some(c) => match c {
                 '\n' => {
-                    self.advance();
-                    TokenKind::Newline
+                    self.advance(); // consume \n
+                    // Newline token logic handled in advance, but we want to return a token
+                    // Actually, skip_whitespace consumes newlines usually, but if we want to support significant whitespace or semicolons insertion
+                    // For now, let's treat explicit Newline if not skipped.
+                    // But wait, skip_whitespace consumes \n if char::is_whitespace() includes \n. Yes it does.
+                    // So we probably won't reach here for \n unless skip_whitespace logic changes.
+                    // Let's assume standard C-style whitespace for now.
+                    TokenKind::Newline // Should be consumed by skip_whitespace usually
                 }
                 '+' => {
                     self.advance();
@@ -252,8 +260,7 @@ impl<'a> Lexer<'a> {
 
         Token {
             kind,
-            line: start_line,
-            column: start_col,
+            span: Span::new(start_pos, self.current_pos, start_line, start_col),
         }
     }
 
