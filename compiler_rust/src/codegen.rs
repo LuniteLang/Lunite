@@ -119,6 +119,16 @@ impl<'ctx> CodeGenerator<'ctx> {
             None,
         );
         module.add_function(
+            "lunite_dec_ref",
+            context.bool_type().fn_type(&[i8_ptr_type.into()], false),
+            None,
+        );
+        module.add_function(
+            "lunite_free_memory",
+            void_type.fn_type(&[i8_ptr_type.into()], false),
+            None,
+        );
+        module.add_function(
             "lunite_throw",
             void_type.fn_type(&[i8_ptr_type.into()], false),
             None,
@@ -342,6 +352,8 @@ impl<'ctx> CodeGenerator<'ctx> {
         extern_functions.insert("lunite_free".to_string());
         extern_functions.insert("lunite_retain".to_string());
         extern_functions.insert("lunite_release".to_string());
+        extern_functions.insert("lunite_dec_ref".to_string());
+        extern_functions.insert("lunite_free_memory".to_string());
         extern_functions.insert("lunite_print".to_string());
         extern_functions.insert("lunite_print_int".to_string());
         extern_functions.insert("lunite_print_float".to_string());
@@ -465,6 +477,77 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
             _ => false,
         }
+    }
+
+    pub fn emit_release_value(&self, builder: &Builder<'ctx>, val: BasicValueEnum<'ctx>, typ: &Type) {
+        if !self.is_ref_counted(typ) {
+            return;
+        }
+        
+        match typ {
+            Type::Custom(name, _) => {
+                let release_fn = self.get_or_create_struct_release_fn(name);
+                if val.is_pointer_value() {
+                     builder.build_call(release_fn, &[val.into_pointer_value().into()], "").unwrap();
+                }
+            }
+            _ => {
+                let release_fn = self.module.get_function("lunite_release").unwrap();
+                if val.is_pointer_value() {
+                    builder.build_call(release_fn, &[val.into_pointer_value().into()], "").unwrap();
+                }
+            }
+        }
+    }
+
+    pub fn get_or_create_struct_release_fn(&self, struct_name: &str) -> FunctionValue<'ctx> {
+        let fn_name = format!("release_{}", struct_name);
+        if let Some(f) = self.module.get_function(&fn_name) {
+            return f;
+        }
+
+        let i8_ptr_type = self.context.ptr_type(AddressSpace::default());
+        let fn_type = self.context.void_type().fn_type(&[i8_ptr_type.into()], false);
+        let f = self.module.add_function(&fn_name, fn_type, None);
+        
+        let bb = self.context.append_basic_block(f, "entry");
+        let builder = self.context.create_builder();
+        builder.position_at_end(bb);
+
+        let ptr = f.get_nth_param(0).unwrap().into_pointer_value();
+        
+        let dec_ref_fn = self.module.get_function("lunite_dec_ref").unwrap();
+        let should_free = builder.build_call(dec_ref_fn, &[ptr.into()], "should_free").unwrap().try_as_basic_value().left().unwrap().into_int_value();
+        
+        let free_bb = self.context.append_basic_block(f, "free");
+        let end_bb = self.context.append_basic_block(f, "end");
+        
+        builder.build_conditional_branch(should_free, free_bb, end_bb).unwrap();
+        
+        builder.position_at_end(free_bb);
+        
+        let st_type = self.struct_types.get(struct_name).unwrap();
+        let typed_ptr = builder.build_bit_cast(ptr, st_type.ptr_type(AddressSpace::default()), "typed_ptr").unwrap().into_pointer_value();
+        
+        let decl = self.struct_decls.get(struct_name).unwrap();
+        
+        for (i, (_, field_type, _)) in decl.fields.iter().enumerate() {
+             if self.is_ref_counted(field_type) {
+                 let field_ptr = builder.build_struct_gep(*st_type, typed_ptr, i as u32, "f_ptr").unwrap();
+                 let field_val = builder.build_load(self.type_to_basic_type(field_type).unwrap(), field_ptr, "f_val").unwrap();
+                 
+                 self.emit_release_value(&builder, field_val, field_type);
+             }
+        }
+        
+        let free_mem_fn = self.module.get_function("lunite_free_memory").unwrap();
+        builder.build_call(free_mem_fn, &[ptr.into()], "").unwrap();
+        builder.build_unconditional_branch(end_bb).unwrap();
+        
+        builder.position_at_end(end_bb);
+        builder.build_return(None).unwrap();
+        
+        f
     }
 
     pub fn compile_modules(&mut self, modules: Vec<TModule>) -> Result<(), CompileError> {
@@ -686,6 +769,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                 ("lunite_realloc", crate::runtime::lunite_realloc as usize),
                 ("lunite_retain", crate::runtime::lunite_retain as usize),
                 ("lunite_release", crate::runtime::lunite_release as usize),
+                ("lunite_dec_ref", crate::runtime::lunite_dec_ref as usize),
+                ("lunite_free_memory", crate::runtime::lunite_free_memory as usize),
                 ("lunite_throw", crate::runtime::lunite_throw as usize),
                 ("lunite_str_eq", crate::runtime::lunite_str_eq as usize),
                 ("lunite_str_len_runtime", crate::runtime::lunite_str_len_runtime as usize),
@@ -779,16 +864,7 @@ impl<'a, 'ctx> FunctionCompiler<'a, 'ctx> {
     }
 
     fn emit_release(&self, val: BasicValueEnum<'ctx>, typ: &Type) {
-        if !self.gen.is_ref_counted(typ) {
-            return;
-        }
-        let release_fn = self.gen.module.get_function("lunite_release").unwrap();
-        if val.is_pointer_value() {
-            self.gen
-                .builder
-                .build_call(release_fn, &[val.into_pointer_value().into()], "")
-                .unwrap();
-        }
+        self.gen.emit_release_value(&self.gen.builder, val, typ);
     }
 
     fn create_alloca(&self, name: &str, typ: &Type) -> PointerValue<'ctx> {

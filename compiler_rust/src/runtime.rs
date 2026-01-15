@@ -71,19 +71,47 @@ pub extern "C" fn lunite_release(user_ptr: *mut u8) {
     if user_ptr.is_null() {
         return;
     }
-    println!("[RUNTIME] lunite_release({:p})", user_ptr);
+    // println!("[RUNTIME] lunite_release({:p})", user_ptr);
     unsafe {
         let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
-        // fetch_sub returns the previous value
         if (*rc_ptr).fetch_sub(1, Ordering::Release) == 1 {
-            // Memory fence to ensure data is synchronized before deallocation
             std::sync::atomic::fence(Ordering::Acquire);
             let size_ptr = user_ptr.sub(16) as *mut usize;
             let size = *size_ptr;
-            println!("[RUNTIME] lunite_free({:p}, size={})", user_ptr.sub(16), size);
+            // println!("[RUNTIME] lunite_free({:p}, size={})", user_ptr.sub(16), size);
             let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
             std::alloc::dealloc(user_ptr.sub(16), layout);
         }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_dec_ref(user_ptr: *mut u8) -> bool {
+    if user_ptr.is_null() {
+        return false;
+    }
+    unsafe {
+        let rc_ptr = user_ptr.sub(8) as *const AtomicUsize;
+        let old_count = (*rc_ptr).fetch_sub(1, Ordering::Release);
+        if old_count == 1 {
+            std::sync::atomic::fence(Ordering::Acquire);
+            return true;
+        }
+        false
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn lunite_free_memory(user_ptr: *mut u8) {
+    if user_ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let size_ptr = user_ptr.sub(16) as *mut usize;
+        let size = *size_ptr;
+        // println!("[RUNTIME] lunite_free_memory({:p}, size={})", user_ptr.sub(16), size);
+        let layout = std::alloc::Layout::from_size_align(size + 16, 16).unwrap();
+        std::alloc::dealloc(user_ptr.sub(16), layout);
     }
 }
 
