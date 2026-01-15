@@ -1,0 +1,20 @@
+pub struct Regex {
+    handle: int
+}
+
+extern fn lunite_regex_compile(pattern: string) -> Result<int, string>;
+extern fn lunite_regex_match(handle: int, text: string) -> bool;
+
+impl Regex {
+    pub fn new(pattern: string) -> Result<Regex, string> {
+        let res = lunite_regex_compile(pattern);
+        match res {
+            Ok(h) => Ok(Regex { handle: h }),
+            Err(e) => Err(e)
+        }
+    }
+
+    pub fn is_match(self, text: string) -> bool {
+        lunite_regex_match(self.handle, text)
+    }
+}

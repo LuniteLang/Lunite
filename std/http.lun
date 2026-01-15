@@ -1,34 +1,54 @@
 import "std/net.lun" as net
 import "std/string.lun" as str
 
-pub struct HttpServer {
-    pub port: int,
-    pub listener: net.TcpListener
+pub struct Request {
+    method: string,
+    path: string,
+    headers: string, // Simplified for now
+    body: string
 }
 
-impl HttpServer {
-    pub fn new(port: int) -> HttpServer {
-        let l = net.bind(port);
-        return HttpServer { port: port, listener: l };
+pub struct Response {
+    status: int,
+    body: string
+}
+
+pub struct Server {
+    listener: net.Listener
+}
+
+impl Server {
+    pub fn new(port: int) -> Result<Server, string> {
+        let l = net.Listener::bind(port);
+        match l {
+            Ok(listener) => Ok(Server { listener: listener }),
+            Err(e) => Err(e)
+        }
     }
 
-    pub fn start(self: HttpServer) {
-        str.print("HTTP Server listening on port ");
-        str.println(str.int_to_string(self.port));
-        
-        let loop_cond = true;
-        while (loop_cond) {
-            let stream = net.accept(self.listener);
-            if (stream.handle != null) {
-                // Read request (dummy)
-                let req = net.read(stream);
-                
-                // Send response
-                let body = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 19\r\n\r\nHello from Lunite!";
-                net.write(stream, body);
-                
-                net.close_stream(stream);
-            }
+    pub fn handle_next(self, handler: fn(Request) -> Response) {
+        let socket_res = self.listener.accept();
+        match socket_res {
+            Ok(socket) => {
+                let data_res = socket.read();
+                match data_res {
+                    Ok(data) => {
+                        // Very basic parsing
+                        let req = Request {
+                            method: "GET", // Placeholder
+                            path: "/",
+                            headers: "",
+                            body: data
+                        };
+                        let res = handler(req);
+                        let response_str = str.concat("HTTP/1.1 200 OK\r\n\r\n", res.body);
+                        socket.write(response_str);
+                        socket.close();
+                    },
+                    Err(_) => socket.close()
+                }
+            },
+            Err(_) => {}
         }
     }
 }

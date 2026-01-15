@@ -399,20 +399,12 @@ impl<'ctx> CodeGenerator<'ctx> {
         let fpm = PassManager::create(&module);
         let mpm = PassManager::create(());
 
+        // Optimization passes for JIT (TODO: Update for LLVM 18 NewPM)
+        /*
         if opt_level != OptimizationLevel::None {
-            // TODO: Manual pass additions are broken in this inkwell version for LLVM 19
-            /*
-            fpm.add_instruction_combining_pass();
-            fpm.add_reassociate_pass();
-            fpm.add_gvn_pass();
-            fpm.add_cfg_simplification_pass();
-            fpm.add_promote_memory_to_register_pass();
-
-            mpm.add_dead_arg_elimination_pass();
-            mpm.add_global_dce_pass();
-            mpm.add_function_inline_pass();
-            */
+             // New Pass Manager logic required here
         }
+        */
 
         fpm.initialize();
 

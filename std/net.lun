@@ -1,53 +1,54 @@
-// std/net.lun - Networking Primitives
-
-pub struct NetResult {
-    pub tag: int,
-    pub payload: *void
+pub struct Socket {
+    handle: int
 }
 
-extern fn lunite_net_connect(host: string, port: int) -> NetResult
-extern fn lunite_net_bind(port: int) -> NetResult
-extern fn lunite_net_accept(listener: *void) -> NetResult
-extern fn lunite_net_read(stream: *void) -> string
-extern fn lunite_net_write(stream: *void, s: string) -> void
-extern fn lunite_net_close_socket(stream: *void) -> void
-extern fn lunite_net_close_server(listener: *void) -> void
-
-pub struct TcpStream {
-    pub handle: *void
+pub struct Listener {
+    handle: int
 }
 
-pub struct TcpListener {
-    pub handle: *void
+extern fn lunite_net_bind(port: int) -> Result<int, int>;
+extern fn lunite_net_accept(handle: int) -> Result<int, int>;
+extern fn lunite_net_read(handle: int) -> Result<string, int>;
+extern fn lunite_net_write(handle: int, data: string);
+extern fn lunite_net_close_socket(handle: int);
+extern fn lunite_net_close_server(handle: int);
+
+impl Listener {
+    pub fn bind(port: int) -> Result<Listener, string> {
+        let res = lunite_net_bind(port);
+        match res {
+            Ok(h) => Ok(Listener { handle: h }),
+            Err(_) => Err("Failed to bind port")
+        }
+    }
+
+    pub fn accept(self) -> Result<Socket, string> {
+        let res = lunite_net_accept(self.handle);
+        match res {
+            Ok(h) => Ok(Socket { handle: h }),
+            Err(_) => Err("Accept failed")
+        }
+    }
+
+    pub fn close(self) {
+        lunite_net_close_server(self.handle);
+    }
 }
 
-pub fn connect(host: string, port: int) -> TcpStream {
-    let res = lunite_net_connect(host, port);
-    return TcpStream { handle: res.payload };
-}
+impl Socket {
+    pub fn read(self) -> Result<string, string> {
+        let res = lunite_net_read(self.handle);
+        match res {
+            Ok(s) => Ok(s),
+            Err(_) => Err("Read failed")
+        }
+    }
 
-pub fn bind(port: int) -> TcpListener {
-    let res = lunite_net_bind(port);
-    return TcpListener { handle: res.payload };
-}
+    pub fn write(self, data: string) {
+        lunite_net_write(self.handle, data);
+    }
 
-pub fn accept(listener: TcpListener) -> TcpStream {
-    let res = lunite_net_accept(listener.handle);
-    return TcpStream { handle: res.payload };
-}
-
-pub fn read(stream: TcpStream) -> string {
-    return lunite_net_read(stream.handle);
-}
-
-pub fn write(stream: TcpStream, s: string) {
-    lunite_net_write(stream.handle, s);
-}
-
-pub fn close_stream(stream: TcpStream) {
-    lunite_net_close_socket(stream.handle);
-}
-
-pub fn close_listener(listener: TcpListener) {
-    lunite_net_close_server(listener.handle);
+    pub fn close(self) {
+        lunite_net_close_socket(self.handle);
+    }
 }
