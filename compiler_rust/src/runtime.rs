@@ -532,6 +532,15 @@ pub extern "C" fn lunite_io_read_file_str(path_ptr: *mut LuniteString) -> *mut L
 }
 
 #[no_mangle]
+pub extern "C" fn lunite_regex_compile(_: *const LuniteString) -> LuniteResult {
+    LuniteResult { tag: 1, payload: 0 }
+}
+#[no_mangle]
+pub extern "C" fn lunite_regex_match(_: i64, _: *const LuniteString) -> bool {
+    false
+}
+
+#[no_mangle]
 pub extern "C" fn lunite_from_c_str(s: *const i8) -> *mut LuniteString {
     if s.is_null() {
         return ptr::null_mut();

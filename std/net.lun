@@ -6,37 +6,18 @@ pub struct Listener {
     handle: int
 }
 
+extern fn lunite_net_connect(host: string, port: int) -> Result<int, int>;
 extern fn lunite_net_bind(port: int) -> Result<int, int>;
-extern fn lunite_net_accept(handle: int) -> Result<int, int>;
-extern fn lunite_net_read(handle: int) -> Result<string, int>;
-extern fn lunite_net_write(handle: int, data: string);
-extern fn lunite_net_close_socket(handle: int);
-extern fn lunite_net_close_server(handle: int);
-
-impl Listener {
-    pub fn bind(port: int) -> Result<Listener, string> {
-        let res = lunite_net_bind(port);
-        match res {
-            Ok(h) => Ok(Listener { handle: h }),
-            Err(_) => Err("Failed to bind port")
-        }
-    }
-
-    pub fn accept(self) -> Result<Socket, string> {
-        let res = lunite_net_accept(self.handle);
+// ...
+impl Socket {
+    pub fn connect(host: string, port: int) -> Result<Socket, string> {
+        let res = lunite_net_connect(host, port);
         match res {
             Ok(h) => Ok(Socket { handle: h }),
-            Err(_) => Err("Accept failed")
+            Err(_) => Err("Connect failed")
         }
     }
-
-    pub fn close(self) {
-        lunite_net_close_server(self.handle);
-    }
-}
-
-impl Socket {
-    pub fn read(self) -> Result<string, string> {
+// ...
         let res = lunite_net_read(self.handle);
         match res {
             Ok(s) => Ok(s),
