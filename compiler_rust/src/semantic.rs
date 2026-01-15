@@ -260,6 +260,7 @@ pub struct SemanticAnalyzer {
     pub pending_items: Vec<TItem>,
     pub in_pure_context: bool,
     pub current_return_type: Option<Type>,
+    pub vfs: HashMap<PathBuf, String>,
     processing_stack: HashSet<PathBuf>,
     parsed_files: HashSet<PathBuf>,
     lib_paths: Vec<PathBuf>,
@@ -286,6 +287,7 @@ impl SemanticAnalyzer {
             pending_items: Vec::new(),
             in_pure_context: false,
             current_return_type: None,
+            vfs: HashMap::new(),
             processing_stack: HashSet::new(),
             parsed_files: HashSet::new(),
             lib_paths,
@@ -898,8 +900,12 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze_module_recursive(&mut self, path: PathBuf) -> Result<String, CompileError> {
-        let abs_path = fs::canonicalize(&path)
-            .map_err(|e| self.cur_error(&format!("Path error: {} ({})", e, path.display())))?;
+        let abs_path = if self.vfs.contains_key(&path) {
+            path.clone()
+        } else {
+            fs::canonicalize(&path)
+                .map_err(|e| self.cur_error(&format!("Path error: {} ({})", e, path.display())))?
+        };
         let mod_name = abs_path.file_stem().unwrap().to_string_lossy().to_string();
 
         if self.analyzed_modules.contains_key(&mod_name) {
@@ -914,8 +920,12 @@ impl SemanticAnalyzer {
         self.processing_stack.insert(abs_path.clone());
         self.parsed_files.insert(abs_path.clone());
 
-        let source = fs::read_to_string(&abs_path)
-            .map_err(|e| self.cur_error(&format!("Read error: {}", e)))?;
+        let source = if let Some(s) = self.vfs.get(&abs_path) {
+            s.clone()
+        } else {
+            fs::read_to_string(&abs_path)
+                .map_err(|e| self.cur_error(&format!("Read error: {}", e)))?
+        };
         let lexer = Lexer::new(&source);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program()?;

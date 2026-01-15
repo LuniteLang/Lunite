@@ -121,6 +121,7 @@ struct LspState {
     current_uri: Option<Url>,
     source_code: String,
     entry_module_name: Option<String>,
+    vfs: HashMap<Url, String>,
 }
 
 impl LspState {
@@ -130,12 +131,14 @@ impl LspState {
             current_uri: None,
             source_code: String::new(),
             entry_module_name: None,
+            vfs: HashMap::new(),
         }
     }
 
     fn check_document(&mut self, connection: &Connection, uri: Url, text: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.current_uri = Some(uri.clone());
         self.source_code = text.to_string();
+        self.vfs.insert(uri.clone(), text.to_string());
         
         let mut diagnostics = Vec::new();
         
@@ -144,12 +147,15 @@ impl LspState {
         
         match parser.parse_program() {
             Ok(_) => {
-                let tmp_path = std::env::temp_dir().join("lunite_lsp_tmp.lun");
-                if let Err(e) = std::fs::write(&tmp_path, text) {
-                    eprintln!("[LSP] Failed to write temp file: {}", e);
-                } else {
-                    let mut analyzer = SemanticAnalyzer::new(vec![std::env::current_dir().unwrap_or_default()]);
-                    match analyzer.analyze_module_recursive(tmp_path) {
+                let mut analyzer = SemanticAnalyzer::new(vec![std::env::current_dir().unwrap_or_default()]);
+                for (u, content) in &self.vfs {
+                    if let Ok(path) = u.to_file_path() {
+                        analyzer.vfs.insert(path, content.clone());
+                    }
+                }
+
+                if let Ok(main_path) = uri.to_file_path() {
+                    match analyzer.analyze_module_recursive(main_path) {
                         Ok(mod_name) => {
                             self.entry_module_name = Some(mod_name);
                             self.analyzer = Some(analyzer);

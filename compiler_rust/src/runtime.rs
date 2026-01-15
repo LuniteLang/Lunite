@@ -1,6 +1,7 @@
 use std::fs;
 use std::net::{TcpListener, TcpStream};
 use std::ptr;
+use regex::Regex as RustRegex;
 
 #[repr(C)]
 pub struct LuniteString {
@@ -532,12 +533,34 @@ pub extern "C" fn lunite_io_read_file_str(path_ptr: *mut LuniteString) -> *mut L
 }
 
 #[no_mangle]
-pub extern "C" fn lunite_regex_compile(_: *const LuniteString) -> LuniteResult {
-    LuniteResult { tag: 1, payload: 0 }
+pub extern "C" fn lunite_regex_compile(pattern_ptr: *const LuniteString) -> LuniteResult {
+    unsafe {
+        if pattern_ptr.is_null() || (*pattern_ptr).ptr.is_null() {
+            return LuniteResult { tag: 1, payload: 0 };
+        }
+        let pattern_slice = std::slice::from_raw_parts((*pattern_ptr).ptr, (*pattern_ptr).len);
+        let pattern = String::from_utf8_lossy(pattern_slice);
+        match RustRegex::new(&pattern) {
+            Ok(re) => LuniteResult {
+                tag: 0,
+                payload: Box::into_raw(Box::new(re)) as i64,
+            },
+            Err(_) => LuniteResult { tag: 1, payload: 0 },
+        }
+    }
 }
+
 #[no_mangle]
-pub extern "C" fn lunite_regex_match(_: i64, _: *const LuniteString) -> bool {
-    false
+pub extern "C" fn lunite_regex_match(re_ptr: i64, text_ptr: *const LuniteString) -> bool {
+    unsafe {
+        if re_ptr == 0 || text_ptr.is_null() || (*text_ptr).ptr.is_null() {
+            return false;
+        }
+        let re = &*(re_ptr as *const RustRegex);
+        let text_slice = std::slice::from_raw_parts((*text_ptr).ptr, (*text_ptr).len);
+        let text_str = std::str::from_utf8_unchecked(text_slice);
+        re.is_match(text_str)
+    }
 }
 
 #[no_mangle]

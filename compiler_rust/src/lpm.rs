@@ -6,7 +6,14 @@ use std::process::Command;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Manifest {
     pub package: PackageInfo,
-    pub dependencies: Option<std::collections::HashMap<String, String>>,
+    pub dependencies: Option<std::collections::HashMap<String, Dependency>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Dependency {
+    Simple(String),
+    Detailed { git: String, branch: Option<String> },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -25,12 +32,15 @@ impl Manifest {
         }
 
         if let Some(deps) = &self.dependencies {
-            for (name, url) in deps {
+            for (name, dep) in deps {
+                let url = match dep {
+                    Dependency::Simple(s) => s,
+                    Dependency::Detailed { git, .. } => git,
+                };
                 println!("[LPM] Fetching dependency: {} from {}", name, url);
                 let dep_path = deps_dir.join(name);
                 
                 if !dep_path.exists() {
-                    // Simple git clone for now
                     let status = Command::new("git")
                         .arg("clone")
                         .arg(url)
@@ -43,7 +53,7 @@ impl Manifest {
                     }
                 }
                 
-                paths.push(dep_path.join("src")); // Assuming src dir structure
+                paths.push(dep_path.join("src"));
             }
         }
         Ok(paths)
