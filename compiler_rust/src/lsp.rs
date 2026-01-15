@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use crate::parser::Parser;
 use crate::lexer::Lexer;
-use crate::semantic::{SemanticAnalyzer, TItem, TStatement, TStatementKind, TExpression, TExpressionKind};
+use crate::semantic::{SemanticAnalyzer, TItem, TStatement, TStatementKind, TExpression, TExpressionKind, TBlock, TWhenArm, TWhenPattern};
 use crate::ast::Type;
 use crate::span::Span;
 
@@ -29,8 +29,6 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Send + Sync>> {
         completion_provider: Some(CompletionOptions {
             resolve_provider: Some(false),
             trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
-            work_done_progress_options: Default::default(),
-            all_commit_characters: None,
             ..Default::default()
         }),
         document_symbol_provider: Some(OneOf::Left(true)),
@@ -278,6 +276,7 @@ impl LspState {
             match item {
                 TItem::Function(f) => {
                     update(f.span, format!("Function: {} -> {:?}", f.name, f.return_type));
+                    self.traverse_block(&f.body, offset, &mut update);
                 }
                 TItem::Struct(s) => {
                     update(s.span, format!("Struct: {}", s.name));
@@ -289,6 +288,85 @@ impl LspState {
             }
         }
         best_match
+    }
+
+    fn traverse_block(&self, block: &TBlock, offset: usize, update: &mut impl FnMut(Span, String)) {
+        for stmt in &block.statements {
+            self.traverse_statement(stmt, offset, update);
+        }
+    }
+
+    fn traverse_statement(&self, stmt: &TStatement, offset: usize, update: &mut impl FnMut(Span, String)) {
+        match &stmt.kind {
+            TStatementKind::Let { name, var_type, value } => {
+                update(stmt.span, format!("Local Variable: {} : {:?}", name, var_type));
+                if let Some(e) = value { self.traverse_expression(e, offset, update); }
+            }
+            TStatementKind::Expr(e) => self.traverse_expression(e, offset, update),
+            TStatementKind::Assign { lvalue, rvalue } => {
+                self.traverse_expression(lvalue, offset, update);
+                self.traverse_expression(rvalue, offset, update);
+            }
+            TStatementKind::Return(oe) => {
+                if let Some(e) = oe { self.traverse_expression(e, offset, update); }
+            }
+            TStatementKind::If { condition, then_block, else_block } => {
+                self.traverse_expression(condition, offset, update);
+                self.traverse_block(then_block, offset, update);
+                if let Some(b) = else_block { self.traverse_block(b, offset, update); }
+            }
+            TStatementKind::While { condition, body } => {
+                self.traverse_expression(condition, offset, update);
+                self.traverse_block(body, offset, update);
+            }
+            TStatementKind::Block(b) | TStatementKind::Region { body: b } => self.traverse_block(b, offset, update),
+            TStatementKind::Throw { value } => self.traverse_expression(value, offset, update),
+            TStatementKind::Spawn(e) => self.traverse_expression(e, offset, update),
+            TStatementKind::TryCatch { try_block, catch_block, .. } => {
+                self.traverse_block(try_block, offset, update);
+                self.traverse_block(catch_block, offset, update);
+            }
+            TStatementKind::When { subject, arms } => {
+                self.traverse_expression(subject, offset, update);
+                for arm in arms {
+                    self.traverse_block(&arm.body, offset, update);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn traverse_expression(&self, expr: &TExpression, offset: usize, update: &mut impl FnMut(Span, String)) {
+        update(expr.span, format!("Expression of type: {:?}", expr.typ));
+        match &expr.kind {
+            TExpressionKind::Binary { left, right, .. } => {
+                self.traverse_expression(left, offset, update);
+                self.traverse_expression(right, offset, update);
+            }
+            TExpressionKind::Unary { right, .. } => self.traverse_expression(right, offset, update),
+            TExpressionKind::Call { args, .. } => {
+                for a in args { self.traverse_expression(a, offset, update); }
+            }
+            TExpressionKind::MemberAccess { object, .. } => self.traverse_expression(object, offset, update),
+            TExpressionKind::Index { array, index } => {
+                self.traverse_expression(array, offset, update);
+                self.traverse_expression(index, offset, update);
+            }
+            TExpressionKind::StructInit { fields, .. } => {
+                for (_, e) in fields { self.traverse_expression(e, offset, update); }
+            }
+            TExpressionKind::EnumInit { value, .. } => {
+                if let Some(e) = value { self.traverse_expression(e, offset, update); }
+            }
+            TExpressionKind::ArrayLiteral { elements } => {
+                for e in elements { self.traverse_expression(e, offset, update); }
+            }
+            TExpressionKind::ArrayRepeat { value, .. } => self.traverse_expression(value, offset, update),
+            TExpressionKind::Cast { expression, .. } => self.traverse_expression(expression, offset, update),
+            TExpressionKind::Try { expression } => self.traverse_expression(expression, offset, update),
+            TExpressionKind::Comptime { body } => self.traverse_block(body, offset, update),
+            _ => {}
+        }
     }
 
     fn handle_hover(&self, params: HoverParams) -> Option<Hover> {
@@ -339,18 +417,16 @@ impl LspState {
             });
         }
 
-        // Add types
         let types = vec!["int", "float", "bool", "string", "void", "Int", "Float", "Bool", "String", "Void"];
         for t in types {
             items.push(CompletionItem {
                 label: t.to_string(),
-                kind: Some(CompletionItemKind::CLASS), // Or Keyword/Struct
+                kind: Some(CompletionItemKind::CLASS),
                 ..Default::default()
             });
         }
 
         if let Some(analyzer) = &self.analyzer {
-            // Global functions
             for (name, _) in &analyzer.functions {
                 items.push(CompletionItem {
                     label: name.clone(),
@@ -358,7 +434,6 @@ impl LspState {
                     ..Default::default()
                 });
             }
-            // Global structs
             for (name, _) in &analyzer.structs {
                 items.push(CompletionItem {
                     label: name.clone(),
@@ -366,7 +441,6 @@ impl LspState {
                     ..Default::default()
                 });
             }
-             // Global enums
             for name in &analyzer.enum_names {
                 items.push(CompletionItem {
                     label: name.clone(),
@@ -423,10 +497,7 @@ impl LspState {
         let new_name = params.new_name;
         let offset = self.offset_at_position(pos.line, pos.character);
 
-        // Find symbol at cursor
         if let Some((span, _info)) = self.find_at_pos(offset) {
-            // Very Basic Rename: Only rename the definition found. 
-            // TODO: Find all references.
             if let Some(uri) = &self.current_uri {
                 let range = Range {
                      start: self.position_at_offset(span.start),

@@ -65,8 +65,8 @@
 					"name": "meta.function.definition.lunite",
 					"match": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
 					"captures": {
-						"1": {"name": "keyword.other.fn.lunite"},
-						"2": {"name": "entity.name.function.lunite"}
+						"1": { "name": "keyword.other.fn.lunite" },
+						"2": { "name": "entity.name.function.lunite" }
 					}
 				},
 				{
@@ -84,7 +84,11 @@
 				{
 					"name": "entity.name.type.lunite",
 					"match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
-				}
+				},
+                {
+                    "match": "(?<=:\\\\s*)\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+                    "name": "entity.name.type.declaration.lunite"
+                }
 			]
 		},
 		"keywords": {
@@ -140,8 +144,8 @@
 				{
 					"match": "\\b(let|mut)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
 					"captures": {
-						"1": {"name": "keyword.other.lunite"},
-						"2": {"name": "variable.other.lunite"}
+						"1": { "name": "keyword.other.lunite" },
+						"2": { "name": "variable.other.declaration.lunite" }
 					}
 				},
                 {
@@ -162,15 +166,15 @@
 			"patterns": [
 				{
 					"name": "punctuation.section.block.begin.lunite",
-					"match": "\{"
+					"match": "\\{"
 				},
 				{
 					"name": "punctuation.section.block.end.lunite",
-					"match": "\}"
+					"match": "\\}"
 				},
 				{
 					"name": "punctuation.section.parens.begin.lunite",
-					"match": "\("
+					"match": "\\("
 				},
 				{
 					"name": "punctuation.section.parens.end.lunite",
