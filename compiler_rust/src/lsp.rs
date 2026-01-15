@@ -282,7 +282,9 @@ impl LspState {
             match item {
                 TItem::Function(f) => {
                     update(f.span, format!("Function: {} -> {:?}", f.name, f.return_type));
-                    self.traverse_block(&f.body, offset, &mut update);
+                    if let Some(body) = &f.body {
+                        self.traverse_block(body, offset, &mut update);
+                    }
                 }
                 TItem::Struct(s) => {
                     update(s.span, format!("Struct: {}", s.name));

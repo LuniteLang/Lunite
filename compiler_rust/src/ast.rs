@@ -47,12 +47,21 @@ pub enum Item {
     ExternFunction(ExternFunctionDecl),
     Struct(StructDecl),
     Enum(EnumDecl),
+    Trait(TraitDecl),
     Impl(ImplDecl),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitDecl {
+    pub name: String,
+    pub methods: Vec<FunctionDecl>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplDecl {
     pub struct_name: String,
+    pub trait_name: Option<String>,
     pub generic_params: Vec<String>,
     pub methods: Vec<FunctionDecl>,
     pub span: Span,
@@ -115,7 +124,7 @@ pub struct FunctionDecl {
     pub generic_params: Vec<String>,
     pub params: Vec<(String, Type, bool)>,
     pub return_type: Type,
-    pub body: Block,
+    pub body: Option<Block>,
     pub visibility: Visibility,
     pub is_pure: bool,
     pub contract: Option<Expression>,

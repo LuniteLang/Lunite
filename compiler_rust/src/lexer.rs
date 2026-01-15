@@ -314,6 +314,7 @@ impl<'a> Lexer<'a> {
             "as" => TokenKind::TokAs,
             "spawn" => TokenKind::TokSpawn,
             "sizeof" => TokenKind::TokSizeof,
+            "trait" => TokenKind::TokTrait,
             _ => TokenKind::Identifier(text.to_string()),
         }
     }

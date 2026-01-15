@@ -1,7 +1,7 @@
 use crate::ast::{
     Block, EnumDecl, EnumVariant, Expression, ExpressionKind, ExternFunctionDecl, FunctionDecl,
     ImplDecl, Item, NativeFunctionDecl, Program, Statement, StatementKind, StructDecl, StructLayout,
-    Type, Visibility, WhenArm, WhenPattern,
+    TraitDecl, Type, Visibility, WhenArm, WhenPattern,
 };
 use crate::lexer::Lexer;
 use crate::span::Span;
@@ -142,7 +142,6 @@ impl<'a> Parser<'a> {
             if self.cur_is(&TokenKind::Eof) {
                 break;
             }
-            // self.next_token(); // parse_item consumes
             self.skip_newlines();
         }
         Ok(Program { items, span: start_span.merge(self.prev_span) })
@@ -175,12 +174,188 @@ impl<'a> Parser<'a> {
             )),
             TokenKind::TokStruct => Ok(Item::Struct(self.parse_struct_decl(visibility, start_span)?)),
             TokenKind::TokEnum => Ok(Item::Enum(self.parse_enum_decl(visibility, start_span)?)),
+            TokenKind::TokTrait => Ok(Item::Trait(self.parse_trait_decl(start_span)?)),
             TokenKind::TokImpl => self.parse_impl_item(start_span),
             _ => Err(self.cur_error(&format!(
                 "Expected declaration, got {:?}",
                 self.current_token.kind
             ))),
         }
+    }
+
+    fn parse_trait_decl(&mut self, start_span: Span) -> Result<TraitDecl, CompileError> {
+        self.next_token(); // trait
+        let name = self.expect_identifier_string()?;
+        self.next_token();
+        
+        self.skip_newlines();
+        if !self.cur_is(&TokenKind::LBrace) {
+            return Err(self.cur_error("Expected '{' after trait name"));
+        }
+        self.next_token();
+
+        let mut methods = Vec::new();
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
+            self.skip_newlines();
+            if self.cur_is(&TokenKind::RBrace) {
+                break;
+            }
+            if self.cur_is(&TokenKind::TokFn) || self.cur_is(&TokenKind::TokPub) {
+                let start = self.current_token.span;
+                let mut vis = Visibility::Private;
+                if self.cur_is(&TokenKind::TokPub) {
+                    vis = Visibility::Public;
+                    self.next_token();
+                }
+                let is_pure = if self.cur_is(&TokenKind::TokPure) {
+                    self.next_token();
+                    true
+                } else {
+                    false
+                };
+                if self.cur_is(&TokenKind::TokFn) {
+                    methods.push(self.parse_function_decl(vis, is_pure, start)?);
+                } else {
+                    return Err(self.cur_error("Expected function in trait"));
+                }
+            } else {
+                return Err(self.cur_error("Expected function in trait"));
+            }
+            self.skip_newlines();
+        }
+        let end_span = self.current_token.span;
+        self.next_token(); // }
+        Ok(TraitDecl {
+            name,
+            methods,
+            span: start_span.merge(end_span),
+        })
+    }
+
+    fn parse_function_decl(
+        &mut self,
+        visibility: Visibility,
+        is_pure: bool,
+        start_span: Span,
+    ) -> Result<FunctionDecl, CompileError> {
+        self.next_token(); // fn
+        let name = self.expect_identifier_string()?;
+        self.next_token();
+        let generic_params = if self.cur_is(&TokenKind::Less) {
+            let gp = self.parse_generic_params()?;
+            self.next_token(); // move to '>'
+            if !self.cur_is(&TokenKind::Greater) {
+                return Err(self.cur_error("Expected '>'"));
+            }
+            self.next_token(); // move past '>'
+            gp
+        } else {
+            vec![]
+        };
+        if !self.cur_is(&TokenKind::LParen) {
+            return Err(self.cur_error("Expected '('"));
+        }
+        let params = self.parse_function_params()?;
+        self.next_token(); // move past ')'
+        let return_type = if self.cur_is(&TokenKind::Arrow) {
+            self.next_token();
+            let t = self.parse_type()?;
+            self.next_token(); // move past type
+            t
+        } else {
+            Type::Void
+        };
+
+        let mut contract = None;
+        if self.cur_is(&TokenKind::TokReq) {
+            self.next_token();
+            contract = Some(self.parse_expression(Precedence::Lowest)?);
+        }
+
+        let body = if self.cur_is(&TokenKind::Semicolon) {
+            self.next_token();
+            None
+        } else {
+            self.skip_newlines();
+            if self.cur_is(&TokenKind::LBrace) {
+                Some(self.parse_block()?)
+            } else {
+                return Err(self.cur_error("Expected '{' or ';' after function signature"));
+            }
+        };
+
+        Ok(FunctionDecl {
+            name,
+            generic_params,
+            params,
+            return_type,
+            body,
+            visibility,
+            is_pure,
+            contract,
+            span: start_span.merge(self.prev_span),
+        })
+    }
+
+    fn parse_impl_item(&mut self, start_span: Span) -> Result<Item, CompileError> {
+        self.next_token(); // impl
+        
+        let generic_params = if self.cur_is(&TokenKind::Less) {
+            let gp = self.parse_generic_params()?;
+            self.next_token(); // >
+            self.next_token(); // past >
+            gp
+        } else {
+            vec![]
+        };
+
+        let name1 = self.expect_identifier_string()?;
+        self.next_token();
+
+        let (struct_name, trait_name) = if self.cur_is(&TokenKind::TokFor) {
+            self.next_token(); // for
+            let name2 = self.expect_identifier_string()?;
+            self.next_token();
+            (name2, Some(name1))
+        } else {
+            (name1, None)
+        };
+
+        self.skip_newlines();
+        if !self.cur_is(&TokenKind::LBrace) {
+            return Err(self.cur_error("Expected '{'"));
+        }
+        self.next_token();
+
+        let mut methods = Vec::new();
+        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
+            self.skip_newlines();
+            if self.cur_is(&TokenKind::RBrace) {
+                break;
+            }
+            let m_start = self.current_token.span;
+            let mut vis = Visibility::Private;
+            if self.cur_is(&TokenKind::TokPub) {
+                vis = Visibility::Public;
+                self.next_token();
+            }
+            if self.cur_is(&TokenKind::TokFn) {
+                methods.push(self.parse_function_decl(vis, false, m_start)?);
+            } else {
+                return Err(self.cur_error("Expected function in impl block"));
+            }
+            self.skip_newlines();
+        }
+        let end_span = self.current_token.span;
+        self.next_token(); // }
+
+        Ok(Item::Impl(ImplDecl {
+            struct_name,
+            trait_name,
+            generic_params,
+            methods,
+            span: start_span.merge(end_span),
+        }))
     }
 
     fn parse_extern_function_decl(&mut self, start_span: Span) -> Result<ExternFunctionDecl, CompileError> {
@@ -418,121 +593,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_impl_item(&mut self, start_span: Span) -> Result<Item, CompileError> {
-        self.next_token(); // impl
-        let generic_params = if self.cur_is(&TokenKind::Less) {
-            let gp = self.parse_generic_params()?;
-            self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) {
-                return Err(self.cur_error("Expected '>'"));
-            }
-            self.next_token(); // move past '>'
-            gp
-        } else {
-            vec![]
-        };
-        let struct_name = self.expect_identifier_string()?;
-        self.next_token();
-        if self.cur_is(&TokenKind::Less) {
-            let _ = self.parse_type_arguments()?;
-            self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) {
-                return Err(self.cur_error("Expected '>' after impl type args"));
-            }
-            self.next_token(); // move past '>'
-        }
-        self.skip_newlines();
-        if !self.cur_is(&TokenKind::LBrace) {
-            return Err(self.cur_error("Expected '{'"));
-        }
-        self.next_token();
-        let mut methods = Vec::new();
-        while !self.cur_is(&TokenKind::RBrace) && !self.cur_is(&TokenKind::Eof) {
-            self.skip_newlines();
-            if self.cur_is(&TokenKind::RBrace) {
-                break;
-            }
-            let mut vis = Visibility::Private;
-            let m_start = self.current_token.span;
-            if self.cur_is(&TokenKind::TokPub) {
-                vis = Visibility::Public;
-                self.next_token();
-            }
-            let is_p = if self.cur_is(&TokenKind::TokPure) {
-                self.next_token();
-                true
-            } else {
-                false
-            };
-            if !self.cur_is(&TokenKind::TokFn) {
-                return Err(self.cur_error("Expected fn"));
-            }
-            methods.push(self.parse_function_decl(vis, is_p, m_start)?);
-            // parse_function_decl consumes body which ends with }
-            self.skip_newlines();
-        }
-        if !self.cur_is(&TokenKind::RBrace) {
-            return Err(self.cur_error("Expected '}'"));
-        }
-        let end_span = self.current_token.span;
-        self.next_token(); // consume }
-        Ok(Item::Impl(ImplDecl {
-            struct_name,
-            generic_params,
-            methods,
-            span: start_span.merge(end_span),
-        }))
-    }
-
-    fn parse_function_decl(
-        &mut self,
-        visibility: Visibility,
-        is_pure: bool,
-        start_span: Span,
-    ) -> Result<FunctionDecl, CompileError> {
-        self.next_token(); // fn
-        let name = self.expect_identifier_string()?;
-        self.next_token();
-        let generic_params = if self.cur_is(&TokenKind::Less) {
-            let gp = self.parse_generic_params()?;
-            self.next_token(); // move to '>'
-            if !self.cur_is(&TokenKind::Greater) {
-                return Err(self.cur_error("Expected '>'"));
-            }
-            self.next_token(); // move past '>'
-            gp
-        } else {
-            vec![]
-        };
-        if !self.cur_is(&TokenKind::LParen) {
-            return Err(self.cur_error("Expected '('"));
-        }
-        let params = self.parse_function_params()?;
-        self.next_token(); // move past ')'
-        let return_type = if self.cur_is(&TokenKind::Arrow) {
-            self.next_token();
-            let t = self.parse_type()?;
-            self.next_token(); // move past type
-            t
-        } else {
-            Type::Void
-        };
-        self.skip_newlines();
-        let body = self.parse_block()?;
-        let end_span = body.span;
-        Ok(FunctionDecl {
-            name,
-            generic_params,
-            params,
-            return_type,
-            body,
-            visibility,
-            is_pure,
-            contract: None,
-            span: start_span.merge(end_span),
-        })
-    }
-
     fn parse_function_params(&mut self) -> Result<Vec<(String, Type, bool)>, CompileError> {
         self.next_token(); // (
         let mut params = Vec::new();
@@ -545,12 +605,19 @@ impl<'a> Parser<'a> {
             };
             let name = self.expect_identifier_string()?;
             self.next_token();
-            if !self.cur_is(&TokenKind::Colon) {
-                return Err(self.cur_error("Expected ':' after parameter name"));
-            }
-            self.next_token(); // consume :
-            let typ = self.parse_type()?;
-            self.next_token(); // move past type
+            
+            let typ = if name == "self" && !self.cur_is(&TokenKind::Colon) {
+                Type::Custom("Self".to_string(), vec![])
+            } else {
+                if !self.cur_is(&TokenKind::Colon) {
+                    return Err(self.cur_error("Expected ':' after parameter name"));
+                }
+                self.next_token(); // consume :
+                let t = self.parse_type()?;
+                self.next_token(); // move past type
+                t
+            };
+            
             params.push((name, typ, is_m));
             if self.cur_is(&TokenKind::Comma) {
                 self.next_token();
@@ -573,7 +640,6 @@ impl<'a> Parser<'a> {
                 break;
             }
             stmts.push(self.parse_statement()?);
-            // self.next_token(); // Statement parsing usually consumes enough
             self.skip_newlines();
         }
         if !self.cur_is(&TokenKind::RBrace) {
@@ -644,7 +710,6 @@ impl<'a> Parser<'a> {
         }
         self.next_token(); // (
         let subject = self.parse_expression(Precedence::Lowest)?;
-        // self.next_token(); // parse_expression consumes
         if !self.cur_is(&TokenKind::RParen) {
             return Err(self.cur_error("Expected ')' after when subject"));
         }
@@ -661,7 +726,6 @@ impl<'a> Parser<'a> {
                 break;
             }
             let pattern = self.parse_when_pattern()?;
-            // self.next_token(); // move to => (pattern consumes)
             if !self.cur_is(&TokenKind::FatArrow) {
                 return Err(self.cur_error("Expected '=>' after pattern"));
             }
@@ -670,7 +734,6 @@ impl<'a> Parser<'a> {
                 self.parse_block()?
             } else {
                 let expr = self.parse_expression(Precedence::Lowest)?;
-                // self.next_token();
                 let sp = expr.span;
                 Block {
                     statements: vec![self.mk_stmt(StatementKind::Expr(expr), sp, sp)],
@@ -678,7 +741,7 @@ impl<'a> Parser<'a> {
                 }
             };
             let end_arm = body.span;
-            arms.push(WhenArm { pattern, body, span: end_arm /* approx */ });
+            arms.push(WhenArm { pattern, body, span: end_arm });
             if self.cur_is(&TokenKind::Comma) {
                 self.next_token();
             }
@@ -789,7 +852,6 @@ impl<'a> Parser<'a> {
         let start = self.current_token.span;
         self.next_token(); // if
         let c = self.parse_expression(Precedence::Lowest)?;
-        // self.next_token();
         let t = self.parse_block()?;
         let mut e = None;
         let mut end = t.span;
@@ -823,7 +885,6 @@ impl<'a> Parser<'a> {
         let start = self.current_token.span;
         self.next_token(); // while
         let c = self.parse_expression(Precedence::Lowest)?;
-        // self.next_token();
         let b = self.parse_block()?;
         let end = b.span;
         Ok(self.mk_stmt(StatementKind::While {
@@ -836,7 +897,6 @@ impl<'a> Parser<'a> {
         let start = self.current_token.span;
         self.next_token(); // try
         let t = self.parse_block()?;
-        // self.next_token();
         self.skip_newlines();
         if !self.cur_is(&TokenKind::TokCatch) {
             return Err(self.cur_error("Expected catch"));
@@ -1033,7 +1093,6 @@ impl<'a> Parser<'a> {
         let start = self.current_token.span;
         let n = self.expect_identifier_string()?;
         let mut expr = self.mk_expr(ExpressionKind::Identifier(n.clone()), start, start);
-        let mut current_path = n.clone();
 
         if self.peek_is(&TokenKind::Less) {
             let mut checkpoint = self.clone();
@@ -1059,8 +1118,6 @@ impl<'a> Parser<'a> {
                     object: Box::new(expr.clone()),
                     field: f.clone(),
                 }, start, self.current_token.span);
-                current_path.push('.');
-                current_path.push_str(&f);
 
                 if self.peek_is(&TokenKind::Less) {
                     let mut checkpoint = self.clone();
@@ -1086,9 +1143,6 @@ impl<'a> Parser<'a> {
                     object: Box::new(expr.clone()),
                     field: f.clone(),
                 }, start, self.current_token.span);
-                current_path.push(':');
-                current_path.push(':');
-                current_path.push_str(&f);
                 continue;
             }
             if self.peek_is(&TokenKind::LBrace) {
@@ -1209,6 +1263,7 @@ impl<'a> Parser<'a> {
                     return Err(self.cur_error("Expected )"));
                 }
                 let end = self.current_token.span;
+                self.next_token(); // consume )
                 Ok(self.mk_expr(ExpressionKind::Call {
                     function: Box::new(left),
                     args,
@@ -1219,6 +1274,7 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 let f = self.expect_identifier_string()?;
                 let end = self.current_token.span;
+                self.next_token(); // consume identifier
                 Ok(self.mk_expr(ExpressionKind::MemberAccess {
                     object: Box::new(left),
                     field: f,
@@ -1232,6 +1288,7 @@ impl<'a> Parser<'a> {
                     return Err(self.cur_error("Expected ']'"));
                 }
                 let end = self.current_token.span;
+                self.next_token(); // consume ]
                 Ok(self.mk_expr(ExpressionKind::Index {
                     left: Box::new(left),
                     index: Box::new(index),
@@ -1240,8 +1297,8 @@ impl<'a> Parser<'a> {
             TokenKind::TokAs => {
                 self.next_token();
                 let target_type = self.parse_type()?;
-                // target_type doesn't have span yet, using current token
                 let end = self.current_token.span; 
+                self.next_token(); // move past type
                 Ok(self.mk_expr(ExpressionKind::Cast {
                     expression: Box::new(left),
                     target_type,
@@ -1249,6 +1306,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Question => {
                 let end = self.current_token.span;
+                self.next_token(); // consume ?
                 Ok(self.mk_expr(ExpressionKind::Try {
                     expression: Box::new(left),
                 }, start, end))

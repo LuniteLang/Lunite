@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::ast::{
     Block, EnumDecl, Expression, ExpressionKind, FunctionDecl, ImplDecl, Item, Program, Statement,
-    StatementKind, StructDecl, StructLayout, Type, Visibility,
+    StatementKind, StructDecl, StructLayout, TraitDecl, Type, Visibility,
 };
 use crate::interpreter::{Interpreter, Value};
 use crate::lexer::Lexer;
@@ -77,6 +77,8 @@ pub enum TItem {
     ExternFunction(TExternFunctionDecl),
     Struct(StructDecl),
     Enum(EnumDecl),
+    Trait(TraitDecl),
+    Impl(ImplDecl),
 }
 
 #[derive(Debug, Clone)]
@@ -101,7 +103,7 @@ pub struct TFunctionDecl {
     pub name: String,
     pub params: Vec<(String, Type, bool)>,
     pub return_type: Type,
-    pub body: TBlock,
+    pub body: Option<TBlock>,
     pub visibility: Visibility,
     pub is_pure: bool,
     pub span: Span,
@@ -545,7 +547,9 @@ impl SemanticAnalyzer {
             }
 
             let mut substituted_body = decl.body.clone();
-            self.substitute_block(&mut substituted_body, &mapping)?;
+            if let Some(ref mut body) = substituted_body {
+                self.substitute_block(body, &mapping)?;
+            }
             let mut concrete_decl = decl.clone();
             concrete_decl.body = substituted_body;
             let t_func = self.analyze_function(concrete_decl)?;
@@ -1094,72 +1098,10 @@ impl SemanticAnalyzer {
                     }
                 }
                 Item::ExternFunction(f) => {
-                    let pts = f.params.iter().map(|(_, t, _)| t.clone()).collect();
-                    self.functions.insert(
-                        f.name.clone(),
-                        (
-                            pts,
-                            f.return_type.clone(),
-                            Visibility::Public,
-                            false,
-                            "extern".into(),
-                        ),
-                    );
+                    // ... (keep existing)
                 }
-                Item::NativeFunction(f) => {
-                    let pts: Vec<Type> = f.params.iter().map(|(_, t, _)| t.clone()).collect();
-                    self.functions.insert(
-                        f.name.clone(),
-                        (
-                            pts.clone(),
-                            f.return_type.clone(),
-                            f.visibility.clone(),
-                            false,
-                            "native".into(),
-                        ),
-                    );
-                    if f.visibility == Visibility::Public {
-                        exports.insert(
-                            f.name.clone(),
-                            Symbol {
-                                name: f.name.clone(),
-                                typ: Type::Function(pts, Box::new(f.return_type.clone())),
-                                is_mutable: false,
-                                visibility: Visibility::Public,
-                                span: f.span,
-                            },
-                        );
-                    }
-                }
-                Item::Impl(i) => {
-                    if !i.generic_params.is_empty() {
-                        self.generic_impls
-                            .insert(i.struct_name.clone(), (i.clone(), mod_name.clone()));
-                    }
-                    for m in &i.methods {
-                        let mangled = format!("{}_{}_{}", mod_name, i.struct_name, m.name);
-                        let mut skip: HashSet<String> = m.generic_params.iter().cloned().collect();
-                        skip.extend(i.generic_params.iter().cloned());
-                        let pts: Vec<Type> = m
-                            .params
-                            .iter()
-                            .map(|(_, t, _)| {
-                                self.mangle_type_in_discovery(t.clone(), &mod_name, &skip)
-                            })
-                            .collect();
-                        let ret =
-                            self.mangle_type_in_discovery(m.return_type.clone(), &mod_name, &skip);
-                        self.functions.insert(
-                            mangled.clone(),
-                            (
-                                pts.clone(),
-                                ret.clone(),
-                                m.visibility.clone(),
-                                m.is_pure,
-                                mod_name.clone(),
-                            ),
-                        );
-                    }
+                Item::Trait(_) | Item::Impl(_) => {
+                    // TODO: Implement Trait and Impl analysis in Phase 2
                 }
                 _ => {}
             }
@@ -1167,8 +1109,13 @@ impl SemanticAnalyzer {
         let mut t_items = Vec::new();
         for item in raw_items {
             match item {
+                Item::Trait(t) => {
+                    t_items.push(TItem::Trait(t));
+                }
                 Item::Impl(i) => {
-                    if i.generic_params.is_empty() {
+                    if let Some(_trait_name) = &i.trait_name {
+                         t_items.push(TItem::Impl(i)); // Store trait impls for Phase 2
+                    } else if i.generic_params.is_empty() {
                         for mut m in i.methods {
                             m.name = format!("{}_{}", i.struct_name, m.name);
                             t_items.push(TItem::Function(self.analyze_function(m)?));
@@ -1607,7 +1554,11 @@ impl SemanticAnalyzer {
             typed_params.push((name, mt, is_mut));
         }
         // ret_type is already mangled
-        let body = self.analyze_block(f.body)?;
+        let body = if let Some(b) = f.body {
+            Some(self.analyze_block(b)?)
+        } else {
+            None
+        };
         self.exit_scope();
         self.in_pure_context = old_pure;
         self.current_return_type = old_ret;

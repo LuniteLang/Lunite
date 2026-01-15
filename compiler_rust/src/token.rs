@@ -85,6 +85,7 @@ pub enum TokenKind {
     TokSpawn,
     TokSizeof,
     TokBreak,
+    TokTrait,
 
     // Types
     TypeInt,

@@ -653,7 +653,9 @@ impl<'ctx> CodeGenerator<'ctx> {
         for m in &modules {
             for item in &m.items {
                 if let TItem::Function(f) = item {
-                    self.compile_function_body(f)?;
+                    if f.body.is_some() {
+                        self.compile_function_body(f)?;
+                    }
                 }
             }
         }
@@ -785,7 +787,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 .insert(name.clone(), (VarLoc::Stack(alloca), typ.clone()));
             compiler.scope_stack.last_mut().unwrap().push(name.clone());
         }
-        compiler.compile_block(&f.body)?;
+        compiler.compile_block(f.body.as_ref().unwrap())?;
         if self
             .builder
             .get_insert_block()
