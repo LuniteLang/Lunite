@@ -1,0 +1,16 @@
+{
+  "name": "lunite_lang",
+  "version": "1.0.0",
+  "description": "**Lunite** là một ngôn ngữ lập trình biên dịch hiệu năng cao, được xây dựng bằng Rust và tận dụng sức mạnh của LLVM làm backend. Lunite kết hợp các tính năng hiện đại như Generics, Pattern Matching với một hệ thống quản lý bộ nhớ lai độc đáo.",
+  "main": "index.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

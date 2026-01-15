@@ -1,0 +1,1218 @@
+[{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/parser.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [0]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "0",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/parser.rs"
+		}
+	},
+	"severity": 8,
+	"message": "use of moved value: `b`\nvalue used here after move",
+	"source": "rustc",
+	"startLineNumber": 831,
+	"startColumn": 19,
+	"endLineNumber": 831,
+	"endColumn": 25,
+	"relatedInformation": [
+		{
+			"startLineNumber": 830,
+			"startColumn": 19,
+			"endLineNumber": 830,
+			"endColumn": 20,
+			"message": "value moved here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/parser.rs"
+		},
+		{
+			"startLineNumber": 827,
+			"startColumn": 13,
+			"endLineNumber": 827,
+			"endColumn": 14,
+			"message": "move occurs because `b` has type `Block`, which does not implement the `Copy` trait",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/parser.rs"
+		},
+		{
+			"startLineNumber": 830,
+			"startColumn": 20,
+			"endLineNumber": 830,
+			"endColumn": 20,
+			"message": "consider cloning the value if the performance cost is acceptable: `.clone()`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/parser.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [0]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "0",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 587,
+	"startColumn": 13,
+	"endLineNumber": 587,
+	"endColumn": 27,
+	"relatedInformation": [
+		{
+			"startLineNumber": 587,
+			"startColumn": 13,
+			"endLineNumber": 587,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `Let` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [2]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "2",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "no associated item named `Expr` found for struct `Statement` in the current scope\nassociated item not found in `Statement`",
+	"source": "rustc",
+	"startLineNumber": 597,
+	"startColumn": 24,
+	"endLineNumber": 597,
+	"endColumn": 28,
+	"relatedInformation": [
+		{
+			"startLineNumber": 132,
+			"startColumn": 1,
+			"endLineNumber": 132,
+			"endColumn": 21,
+			"message": "associated item `Expr` not found for this struct",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/ast.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [3]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "3",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 598,
+	"startColumn": 13,
+	"endLineNumber": 598,
+	"endColumn": 30,
+	"relatedInformation": [
+		{
+			"startLineNumber": 598,
+			"startColumn": 13,
+			"endLineNumber": 598,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `Assign` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [5]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "5",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 602,
+	"startColumn": 13,
+	"endLineNumber": 602,
+	"endColumn": 26,
+	"relatedInformation": [
+		{
+			"startLineNumber": 602,
+			"startColumn": 13,
+			"endLineNumber": 602,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `If` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [7]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "7",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 613,
+	"startColumn": 13,
+	"endLineNumber": 613,
+	"endColumn": 29,
+	"relatedInformation": [
+		{
+			"startLineNumber": 613,
+			"startColumn": 13,
+			"endLineNumber": 613,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `While` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [9]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "9",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "no associated item named `Return` found for struct `Statement` in the current scope\nassociated item not found in `Statement`",
+	"source": "rustc",
+	"startLineNumber": 617,
+	"startColumn": 24,
+	"endLineNumber": 617,
+	"endColumn": 30,
+	"relatedInformation": [
+		{
+			"startLineNumber": 132,
+			"startColumn": 1,
+			"endLineNumber": 132,
+			"endColumn": 21,
+			"message": "associated item `Return` not found for this struct",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/ast.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [10]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "10",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "no associated item named `Block` found for struct `Statement` in the current scope\nassociated item not found in `Statement`",
+	"source": "rustc",
+	"startLineNumber": 620,
+	"startColumn": 24,
+	"endLineNumber": 620,
+	"endColumn": 29,
+	"relatedInformation": [
+		{
+			"startLineNumber": 132,
+			"startColumn": 1,
+			"endLineNumber": 132,
+			"endColumn": 21,
+			"message": "associated item `Block` not found for this struct",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/ast.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [11]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "11",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 621,
+	"startColumn": 13,
+	"endLineNumber": 621,
+	"endColumn": 30,
+	"relatedInformation": [
+		{
+			"startLineNumber": 621,
+			"startColumn": 13,
+			"endLineNumber": 621,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `Region` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [13]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "13",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 622,
+	"startColumn": 13,
+	"endLineNumber": 622,
+	"endColumn": 28,
+	"relatedInformation": [
+		{
+			"startLineNumber": 622,
+			"startColumn": 13,
+			"endLineNumber": 622,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `When` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [15]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "15",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "ambiguous associated type",
+	"source": "rustc",
+	"startLineNumber": 628,
+	"startColumn": 13,
+	"endLineNumber": 628,
+	"endColumn": 29,
+	"relatedInformation": [
+		{
+			"startLineNumber": 628,
+			"startColumn": 13,
+			"endLineNumber": 628,
+			"endColumn": 24,
+			"message": "if there were a trait named `Example` with associated type `Throw` implemented for `Statement`, you could use the fully-qualified path: `<Statement as Example>::`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [17]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "17",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "no associated item named `Spawn` found for struct `Statement` in the current scope\nassociated item not found in `Statement`",
+	"source": "rustc",
+	"startLineNumber": 629,
+	"startColumn": 24,
+	"endLineNumber": 629,
+	"endColumn": 29,
+	"relatedInformation": [
+		{
+			"startLineNumber": 132,
+			"startColumn": 1,
+			"endLineNumber": 132,
+			"endColumn": 21,
+			"message": "associated item `Spawn` not found for this struct",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/ast.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [18]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "18",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "pattern does not mention field `span`\nmissing field `span`",
+	"source": "rustc",
+	"startLineNumber": 935,
+	"startColumn": 17,
+	"endLineNumber": 938,
+	"endColumn": 18,
+	"relatedInformation": [
+		{
+			"startLineNumber": 937,
+			"startColumn": 26,
+			"endLineNumber": 938,
+			"endColumn": 18,
+			"message": "include the missing field in the pattern: `, span }`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 937,
+			"startColumn": 26,
+			"endLineNumber": 938,
+			"endColumn": 18,
+			"message": "if you don't care about this missing field, you can explicitly ignore it: `, span: _ }`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 937,
+			"startColumn": 26,
+			"endLineNumber": 938,
+			"endColumn": 18,
+			"message": "or always ignore missing fields here: `, .. }`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [22]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "22",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1000,
+	"startColumn": 29,
+	"endLineNumber": 1000,
+	"endColumn": 35,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [23]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "23",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1030,
+	"startColumn": 29,
+	"endLineNumber": 1030,
+	"endColumn": 35,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [24]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "24",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1073,
+	"startColumn": 29,
+	"endLineNumber": 1073,
+	"endColumn": 35,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [25]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "25",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1110,
+	"startColumn": 29,
+	"endLineNumber": 1110,
+	"endColumn": 35,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [26]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "26",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `TExternFunctionDecl`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1169,
+	"startColumn": 56,
+	"endLineNumber": 1169,
+	"endColumn": 75,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [27]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "27",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `TNativeFunctionDecl`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1176,
+	"startColumn": 56,
+	"endLineNumber": 1176,
+	"endColumn": 75,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [28]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "28",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1251,
+	"startColumn": 23,
+	"endLineNumber": 1251,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [29]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "29",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1259,
+	"startColumn": 23,
+	"endLineNumber": 1259,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [30]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "30",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1267,
+	"startColumn": 23,
+	"endLineNumber": 1267,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [31]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "31",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1275,
+	"startColumn": 23,
+	"endLineNumber": 1275,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [32]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "32",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1283,
+	"startColumn": 23,
+	"endLineNumber": 1283,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [33]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "33",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1298,
+	"startColumn": 23,
+	"endLineNumber": 1298,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [34]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "34",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1306,
+	"startColumn": 23,
+	"endLineNumber": 1306,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [35]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "35",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1314,
+	"startColumn": 23,
+	"endLineNumber": 1314,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [36]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "36",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1322,
+	"startColumn": 23,
+	"endLineNumber": 1322,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [37]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "37",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1333,
+	"startColumn": 23,
+	"endLineNumber": 1333,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [38]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "38",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1344,
+	"startColumn": 23,
+	"endLineNumber": 1344,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [39]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "39",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1352,
+	"startColumn": 23,
+	"endLineNumber": 1352,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [40]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "40",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1363,
+	"startColumn": 23,
+	"endLineNumber": 1363,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [41]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "41",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1379,
+	"startColumn": 23,
+	"endLineNumber": 1379,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [42]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "42",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1387,
+	"startColumn": 23,
+	"endLineNumber": 1387,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [43]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "43",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1395,
+	"startColumn": 23,
+	"endLineNumber": 1395,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [44]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "44",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1403,
+	"startColumn": 23,
+	"endLineNumber": 1403,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [45]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "45",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1411,
+	"startColumn": 23,
+	"endLineNumber": 1411,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [46]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "46",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1419,
+	"startColumn": 23,
+	"endLineNumber": 1419,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [47]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "47",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1451,
+	"startColumn": 23,
+	"endLineNumber": 1451,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [48]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "48",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1464,
+	"startColumn": 27,
+	"endLineNumber": 1464,
+	"endColumn": 33,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [49]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "49",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1477,
+	"startColumn": 27,
+	"endLineNumber": 1477,
+	"endColumn": 33,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [50]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "50",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1497,
+	"startColumn": 23,
+	"endLineNumber": 1497,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [51]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "51",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1505,
+	"startColumn": 23,
+	"endLineNumber": 1505,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [52]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "52",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1513,
+	"startColumn": 23,
+	"endLineNumber": 1513,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [53]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "53",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "missing field `span` in initializer of `semantic::Symbol`\nmissing `span`",
+	"source": "rustc",
+	"startLineNumber": 1521,
+	"startColumn": 23,
+	"endLineNumber": 1521,
+	"endColumn": 29,
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [54]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "54",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "cannot move out of `t_left` because it is borrowed\nmove out of `t_left` occurs here",
+	"source": "rustc",
+	"startLineNumber": 2297,
+	"startColumn": 45,
+	"endLineNumber": 2297,
+	"endColumn": 51,
+	"relatedInformation": [
+		{
+			"startLineNumber": 2294,
+			"startColumn": 23,
+			"endLineNumber": 2294,
+			"endColumn": 34,
+			"message": "borrow of `t_left.typ` occurs here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2289,
+			"startColumn": 21,
+			"endLineNumber": 2289,
+			"endColumn": 27,
+			"message": "binding `t_left` declared here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2300,
+			"startColumn": 31,
+			"endLineNumber": 2300,
+			"endColumn": 36,
+			"message": "borrow later used here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2294,
+			"startColumn": 34,
+			"endLineNumber": 2294,
+			"endColumn": 34,
+			"message": "consider cloning the value if the performance cost is acceptable: `.clone()`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+},{
+	"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs",
+	"owner": "rustc",
+	"code": {
+		"value": "Click for full compiler diagnostic",
+		"target": {
+			"$mid": 1,
+			"path": "/diagnostic message [59]",
+			"scheme": "rust-analyzer-diagnostics-view",
+			"query": "59",
+			"fragment": "file:///home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	},
+	"severity": 8,
+	"message": "cannot move out of `t_left` because it is borrowed\nmove out of `t_left` occurs here",
+	"source": "rustc",
+	"startLineNumber": 2305,
+	"startColumn": 45,
+	"endLineNumber": 2305,
+	"endColumn": 51,
+	"relatedInformation": [
+		{
+			"startLineNumber": 2294,
+			"startColumn": 23,
+			"endLineNumber": 2294,
+			"endColumn": 34,
+			"message": "borrow of `t_left.typ` occurs here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2289,
+			"startColumn": 21,
+			"endLineNumber": 2289,
+			"endColumn": 27,
+			"message": "binding `t_left` declared here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2308,
+			"startColumn": 31,
+			"endLineNumber": 2308,
+			"endColumn": 36,
+			"message": "borrow later used here",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		},
+		{
+			"startLineNumber": 2294,
+			"startColumn": 34,
+			"endLineNumber": 2294,
+			"endColumn": 34,
+			"message": "consider cloning the value if the performance cost is acceptable: `.clone()`",
+			"resource": "/home/kali/Lunite/Lunite/lunite_lang/compiler_rust/src/semantic.rs"
+		}
+	],
+	"origin": "extHost2"
+}]

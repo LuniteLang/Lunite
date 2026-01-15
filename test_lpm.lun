@@ -1,5 +1,0 @@
-import "std/string.lun" as str
-
-fn main() {
-    str.println("LPM Works!");
-}
