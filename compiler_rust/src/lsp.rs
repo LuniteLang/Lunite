@@ -4,9 +4,13 @@ use lsp_types::{
     Hover, HoverContents, HoverParams, InitializeParams, Location, MarkupContent, MarkupKind,
     Position, PublishDiagnosticsParams, Range, ServerCapabilities, TextDocumentSyncCapability,
     TextDocumentSyncKind, Url, GotoDefinitionParams, OneOf, HoverProviderCapability,
+    CompletionOptions, CompletionParams, CompletionItem, CompletionItemKind, CompletionList,
+    DocumentSymbolParams, DocumentSymbol, SymbolKind,
+    RenameParams, WorkspaceEdit, TextEdit,
 };
 use std::error::Error;
 use std::path::PathBuf;
+use std::collections::HashMap;
 use crate::parser::Parser;
 use crate::lexer::Lexer;
 use crate::semantic::{SemanticAnalyzer, TItem, TStatement, TStatementKind, TExpression, TExpressionKind};
@@ -22,6 +26,15 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Send + Sync>> {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
+        completion_provider: Some(CompletionOptions {
+            resolve_provider: Some(false),
+            trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
+            work_done_progress_options: Default::default(),
+            all_commit_characters: None,
+            ..Default::default()
+        }),
+        document_symbol_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Left(true)),
         ..Default::default()
     })
     .unwrap();
@@ -50,6 +63,30 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Send + Sync>> {
                         let id = req.id.clone();
                         let params: GotoDefinitionParams = serde_json::from_value(req.params).unwrap();
                         let resp = state.handle_definition(params);
+                        let result = serde_json::to_value(&resp).unwrap();
+                        let resp_msg = Response { id, result: Some(result), error: None };
+                        connection.sender.send(Message::Response(resp_msg))?;
+                    }
+                    "textDocument/completion" => {
+                        let id = req.id.clone();
+                        let params: CompletionParams = serde_json::from_value(req.params).unwrap();
+                        let resp = state.handle_completion(params);
+                        let result = serde_json::to_value(&resp).unwrap();
+                        let resp_msg = Response { id, result: Some(result), error: None };
+                        connection.sender.send(Message::Response(resp_msg))?;
+                    }
+                    "textDocument/documentSymbol" => {
+                        let id = req.id.clone();
+                        let params: DocumentSymbolParams = serde_json::from_value(req.params).unwrap();
+                        let resp = state.handle_document_symbol(params);
+                        let result = serde_json::to_value(&resp).unwrap();
+                        let resp_msg = Response { id, result: Some(result), error: None };
+                        connection.sender.send(Message::Response(resp_msg))?;
+                    }
+                    "textDocument/rename" => {
+                        let id = req.id.clone();
+                        let params: RenameParams = serde_json::from_value(req.params).unwrap();
+                        let resp = state.handle_rename(params);
                         let result = serde_json::to_value(&resp).unwrap();
                         let resp_msg = Response { id, result: Some(result), error: None };
                         connection.sender.send(Message::Response(resp_msg))?;
@@ -104,13 +141,11 @@ impl LspState {
         
         let mut diagnostics = Vec::new();
         
-        // 1. Lexer & Parser Check
         let lexer = Lexer::new(text);
         let mut parser = Parser::new(lexer);
         
         match parser.parse_program() {
             Ok(_) => {
-                // 2. Semantic Analysis
                 let tmp_path = std::env::temp_dir().join("lunite_lsp_tmp.lun");
                 if let Err(e) = std::fs::write(&tmp_path, text) {
                     eprintln!("[LSP] Failed to write temp file: {}", e);
@@ -139,7 +174,7 @@ impl LspState {
                                 data: None,
                             };
                             diagnostics.push(diag);
-                            self.analyzer = Some(analyzer); // Keep state even on error
+                            self.analyzer = Some(analyzer);
                         }
                     }
                 }
@@ -196,7 +231,7 @@ impl LspState {
             }
         }
         if cur_line == line {
-             return last_offset + (col as usize - cur_col as usize); // approx
+             return last_offset + (col as usize - cur_col as usize);
         }
         self.source_code.len()
     }
@@ -243,7 +278,6 @@ impl LspState {
             match item {
                 TItem::Function(f) => {
                     update(f.span, format!("Function: {} -> {:?}", f.name, f.return_type));
-                    // Traverse Body... (omitted)
                 }
                 TItem::Struct(s) => {
                     update(s.span, format!("Struct: {}", s.name));
@@ -285,6 +319,131 @@ impl LspState {
                      uri: uri.clone(),
                      range: Range { start, end }
                  });
+            }
+        }
+        None
+    }
+
+    fn handle_completion(&self, _params: CompletionParams) -> Option<CompletionList> {
+        let mut items = Vec::new();
+        let keywords = vec![
+            "fn", "let", "mut", "struct", "enum", "if", "else", "while", "return", "import", "as", "pub", "impl",
+            "true", "false", "null", "break", "continue", "try", "catch", "throw", "spawn", "region", "comptime"
+        ];
+
+        for kw in keywords {
+            items.push(CompletionItem {
+                label: kw.to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                ..Default::default()
+            });
+        }
+
+        // Add types
+        let types = vec!["int", "float", "bool", "string", "void", "Int", "Float", "Bool", "String", "Void"];
+        for t in types {
+            items.push(CompletionItem {
+                label: t.to_string(),
+                kind: Some(CompletionItemKind::CLASS), // Or Keyword/Struct
+                ..Default::default()
+            });
+        }
+
+        if let Some(analyzer) = &self.analyzer {
+            // Global functions
+            for (name, _) in &analyzer.functions {
+                items.push(CompletionItem {
+                    label: name.clone(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    ..Default::default()
+                });
+            }
+            // Global structs
+            for (name, _) in &analyzer.structs {
+                items.push(CompletionItem {
+                    label: name.clone(),
+                    kind: Some(CompletionItemKind::STRUCT),
+                    ..Default::default()
+                });
+            }
+             // Global enums
+            for name in &analyzer.enum_names {
+                items.push(CompletionItem {
+                    label: name.clone(),
+                    kind: Some(CompletionItemKind::ENUM),
+                    ..Default::default()
+                });
+            }
+        }
+
+        Some(CompletionList {
+            is_incomplete: false,
+            items,
+        })
+    }
+
+    fn handle_document_symbol(&self, _params: DocumentSymbolParams) -> Option<Vec<DocumentSymbol>> {
+        let analyzer = self.analyzer.as_ref()?;
+        let mod_name = self.entry_module_name.as_ref()?;
+        let module = analyzer.analyzed_modules.get(mod_name)?;
+        
+        let mut symbols = Vec::new();
+        
+        for item in &module.items {
+             let (name, kind, span, detail) = match item {
+                 TItem::Function(f) => (f.name.clone(), SymbolKind::FUNCTION, f.span, format!("fn -> {:?}", f.return_type)),
+                 TItem::Struct(s) => (s.name.clone(), SymbolKind::STRUCT, s.span, "".to_string()),
+                 TItem::Enum(e) => (e.name.clone(), SymbolKind::ENUM, e.span, "".to_string()),
+                 _ => continue,
+             };
+             
+             #[allow(deprecated)]
+             symbols.push(DocumentSymbol {
+                 name,
+                 detail: Some(detail),
+                 kind,
+                 tags: None,
+                 deprecated: None,
+                 range: Range {
+                     start: self.position_at_offset(span.start),
+                     end: self.position_at_offset(span.end),
+                 },
+                 selection_range: Range {
+                     start: self.position_at_offset(span.start),
+                     end: self.position_at_offset(span.end),
+                 },
+                 children: None,
+             });
+        }
+        Some(symbols)
+    }
+
+    fn handle_rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
+        let pos = params.text_document_position.position;
+        let new_name = params.new_name;
+        let offset = self.offset_at_position(pos.line, pos.character);
+
+        // Find symbol at cursor
+        if let Some((span, _info)) = self.find_at_pos(offset) {
+            // Very Basic Rename: Only rename the definition found. 
+            // TODO: Find all references.
+            if let Some(uri) = &self.current_uri {
+                let range = Range {
+                     start: self.position_at_offset(span.start),
+                     end: self.position_at_offset(span.end),
+                };
+                
+                let mut changes = HashMap::new();
+                changes.insert(uri.clone(), vec![TextEdit {
+                    range,
+                    new_text: new_name,
+                }]);
+                
+                return Some(WorkspaceEdit {
+                    changes: Some(changes),
+                    document_changes: None,
+                    change_annotations: None,
+                });
             }
         }
         None
